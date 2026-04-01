@@ -48,6 +48,14 @@ const db   = getFirestore(app);
 const EMAIL_SUPERADMIN = "prof.lafa@gmail.com";
 
 // ──────────────────────────────────────────────────────────
+//  UTILITÁRIO — SANITIZAR PARA FIRESTORE
+// ──────────────────────────────────────────────────────────
+function sanitizarParaFirestore(obj) {
+    return JSON.parse(JSON.stringify(obj, (_, v) => v === undefined ? null : v));
+}
+
+
+// ──────────────────────────────────────────────────────────
 //  PALETAS PRÉ-DEFINIDAS
 // ──────────────────────────────────────────────────────────
 const PALETAS = [
@@ -430,17 +438,14 @@ async function salvarPlanejamentos() {
     try {
         await setDoc(doc(db, 'planejamentos', usuarioLogado.uid), { dados: sanitizarParaFirestore(planejamentos) });
     } catch(e) {
-        showToast('Erro ao salvar. Verifique sua conexão.', 'error');
+        console.error('Erro ao salvar planejamentos:', e);
+        showToast('Erro ao salvar: ' + e.message, 'error');
     }
 }
 
 function salvarPlanejamentosDebounce() {
     clearTimeout(saveTimer);
     saveTimer = setTimeout(salvarPlanejamentos, 1200);
-}
-
-function sanitizarParaFirestore(obj) {
-    return JSON.parse(JSON.stringify(obj, (_, v) => v === undefined ? null : v));
 }
 
 async function salvarHorarioFirestore() {
