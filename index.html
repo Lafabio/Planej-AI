@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Planejador Escolar Pro</title>
+    <title>Planejador de Aulas - SESI</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -22,7 +22,7 @@
             </div>
 
             <div id="registerForm" class="hidden">
-                <input type="text" id="regNome" placeholder="Nome Completo">
+                <input type="text" id="regNome" placeholder="Seu Nome">
                 <input type="text" id="regEscola" placeholder="Nome da Escola">
                 <input type="email" id="regEmail" placeholder="Email">
                 <input type="password" id="regPassword" placeholder="Senha (mín. 6 caracteres)">
@@ -33,54 +33,54 @@
             <div id="resetForm" class="hidden">
                 <p>Insira seu email para recuperar a senha:</p>
                 <input type="email" id="resetEmail" placeholder="Email">
-                <button class="btn-login" onclick="iniciarRecuperacao()">Enviar Email de Recuperação</button>
+                <button class="btn-login" onclick="iniciarRecuperacao()">Enviar Link</button>
                 <p onclick="mostrarLogin()" class="link-auth">Voltar ao login</p>
             </div>
         </div>
     </div>
 
     <div id="appContainer" class="hidden">
-        <header>
-            <div class="user-info">
-                <span id="userName">Professor</span> | <span id="userSchool">Escola</span>
+        <header style="background:#0047B6; color:white; padding:15px; display:flex; justify-content:space-between; align-items:center;">
+            <div>
+                <strong id="userName">Professor</strong> | <small id="userSchool">Escola</small>
             </div>
-            <div class="actions">
-                <button onclick="abrirConfiguracaoHorario()">⚙️ Configurar Grade</button>
-                <button onclick="fazerLogout()" class="btn-logout">Sair</button>
+            <div>
+                <button onclick="abrirConfiguracaoHorario()" style="cursor:pointer; background:rgba(255,255,255,0.2); border:none; color:white; padding:8px 15px; border-radius:5px;">⚙️ Configurar Grade</button>
+                <button onclick="fazerLogout()" style="cursor:pointer; margin-left:10px;">Sair</button>
             </div>
         </header>
 
-        <main id="mainContent">
+        <main style="padding:20px;">
             <div id="gradeSemana"></div>
         </main>
     </div>
 
     <div id="modalHorario" class="modal hidden">
         <div class="modal-content">
-            <h2>Configurar Padrão da Escola</h2>
+            <h3>Configurar Grade da Escola</h3>
             <div class="form-group">
                 <label>Horário de Início:</label>
                 <input type="time" id="cfgInicio" value="07:30">
             </div>
             <div class="form-group">
-                <label>Duração de cada Aula (min):</label>
+                <label>Duração da Aula (min):</label>
                 <input type="number" id="cfgDuracao" value="50">
             </div>
             <div class="form-group">
-                <label>Número de Aulas:</label>
+                <label>Total de Aulas:</label>
                 <input type="number" id="cfgNumAulas" value="6">
             </div>
             <div class="form-group">
-                <label>Aula do Recreio (após qual aula?):</label>
+                <label>Recreio após qual aula?</label>
                 <input type="number" id="cfgAulaRecreio" value="3">
             </div>
             <div class="form-group">
-                <label>Duração do Recreio (min):</label>
+                <label>Duração Recreio (min):</label>
                 <input type="number" id="cfgDuracaoRecreio" value="20">
             </div>
-            <div class="modal-buttons">
-                <button onclick="salvarConfiguracoesEscola()">Salvar Grade</button>
-                <button onclick="fecharModalHorario()">Cancelar</button>
+            <div style="display:flex; gap:10px; margin-top:20px;">
+                <button onclick="salvarConfiguracoesEscola()" style="flex:1; background:#2E7D32; color:white; border:none; padding:10px; border-radius:5px; cursor:pointer;">Salvar</button>
+                <button onclick="fecharModalHorario()" style="flex:1; cursor:pointer;">Cancelar</button>
             </div>
         </div>
     </div>
