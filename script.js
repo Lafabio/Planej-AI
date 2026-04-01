@@ -30,12 +30,12 @@ import {
 //  Substitua pelos dados do seu projeto no Firebase Console
 // ──────────────────────────────────────────────────────────
 const firebaseConfig = {
-    apiKey: "AIzaSyDQHCEOoFwajMXbFppYnEv2wQs64uiLUF8",
-  authDomain: "eduplan-app-abfeb.firebaseapp.com",
-  projectId: "eduplan-app-abfeb",
-  storageBucket: "eduplan-app-abfeb.firebasestorage.app",
-  messagingSenderId: "278323138478",
-  appId: "1:278323138478:web:bf5d17c3bbda8c4ce5823f"
+    apiKey:            "COLE_AQUI_SUA_API_KEY",
+    authDomain:        "COLE_AQUI.firebaseapp.com",
+    projectId:         "COLE_AQUI_O_PROJECT_ID",
+    storageBucket:     "COLE_AQUI.appspot.com",
+    messagingSenderId: "COLE_AQUI",
+    appId:             "COLE_AQUI"
 };
 
 const app  = initializeApp(firebaseConfig);
