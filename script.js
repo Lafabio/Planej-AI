@@ -45,7 +45,7 @@ const db   = getFirestore(app);
 // ──────────────────────────────────────────────────────────
 //  EMAIL DO SUPER-ADMINISTRADOR (cria escolas, gerencia tudo)
 // ──────────────────────────────────────────────────────────
-const EMAIL_SUPERADMIN = "admin@eduplan.com";
+const EMAIL_SUPERADMIN = "prof.lafa@gmail.com";
 
 // ──────────────────────────────────────────────────────────
 //  PALETAS PRÉ-DEFINIDAS
