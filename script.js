@@ -209,30 +209,10 @@ onAuthStateChanged(auth, async (user) => {
         usuarioLogado = null;
         perfilUsuario = null;
         escolaAtual   = null;
-        await carregarEscolasNoSelect();
         mostrarTelaLogin();
     }
     mostrarLoading(false);
 });
-
-// ──────────────────────────────────────────────────────────
-//  CARREGAR ESCOLAS NO SELECT DE CADASTRO
-// ──────────────────────────────────────────────────────────
-async function carregarEscolasNoSelect() {
-    try {
-        const snap = await getDocs(collection(db, 'escolas'));
-        const sel  = document.getElementById('cadastroEscola');
-        if (!sel) return;
-        sel.innerHTML = '<option value="">Selecione sua escola...</option>';
-        snap.forEach(d => {
-            const e = d.data();
-            const o = document.createElement('option');
-            o.value = d.id;
-            o.textContent = e.nome;
-            sel.appendChild(o);
-        });
-    } catch(e) { /* sem escolas ainda */ }
-}
 
 // ──────────────────────────────────────────────────────────
 //  NAVEGAÇÃO ENTRE FORMULÁRIOS
@@ -293,11 +273,10 @@ async function fazerLogin() {
 async function fazerCadastro() {
     const nome    = document.getElementById('cadastroNome').value.trim();
     const email   = document.getElementById('cadastroEmail').value.trim();
-    const escola  = document.getElementById('cadastroEscola').value;
     const senha   = document.getElementById('cadastroSenha').value;
     const conf    = document.getElementById('cadastroConfirmarSenha').value;
 
-    if (!nome || !email || !escola || !senha || !conf) {
+    if (!nome || !email || !senha || !conf) {
         showToast('Preencha todos os campos', 'error'); return;
     }
     if (senha.length < 6) {
@@ -313,7 +292,8 @@ async function fazerCadastro() {
         const cred = await createUserWithEmailAndPassword(auth, email, senha);
         await updateProfile(cred.user, { displayName: nome });
         await setDoc(doc(db, 'usuarios', cred.user.uid), {
-            nome, email, escolaId: escola,
+            nome, email,
+            escolaId: null,   // será definida após o login
             tipo: email === EMAIL_SUPERADMIN ? 'superadmin' : 'professor',
             dataCadastro: new Date().toISOString()
         });
@@ -477,6 +457,110 @@ function iniciarAplicacao() {
     document.getElementById('appPrincipal').classList.remove('hidden');
     setupEventListeners();
     atualizarInterface();
+
+    // Se o usuário não tem escola vinculada, exibir seleção obrigatória
+    if (!perfilUsuario?.escolaId) {
+        abrirModalSelecionarEscola();
+    }
+}
+
+// ──────────────────────────────────────────────────────────
+//  MODAL — SELECIONAR ESCOLA (pós-login, obrigatório)
+// ──────────────────────────────────────────────────────────
+async function abrirModalSelecionarEscola() {
+    mostrarLoading(true);
+    let escolas = [];
+    try {
+        const snap = await getDocs(collection(db, 'escolas'));
+        snap.forEach(d => escolas.push({ id: d.id, ...d.data() }));
+    } catch(e) { /* pode não ter escolas ainda */ }
+    mostrarLoading(false);
+
+    const isSuperAdmin = perfilUsuario?.tipo === 'superadmin';
+
+    const modal = document.createElement('div');
+    modal.id = 'modalSelecionarEscola';
+    // Sem botão de fechar — é obrigatório
+    modal.className = 'modal-backdrop';
+    modal.style.cssText = 'z-index:2000;'; // acima de tudo
+
+    modal.innerHTML = `
+    <div class="modal-box modal-sm">
+        <div class="modal-header" style="border-bottom:none;padding-bottom:4px;">
+            <h3>🏫 Associe sua Escola</h3>
+        </div>
+        <p style="color:var(--text-muted);margin-bottom:22px;font-size:14px;line-height:1.7;">
+            Antes de continuar, vincule sua conta a uma escola.
+            ${isSuperAdmin ? 'Como superadministrador, você também pode <strong>criar uma nova escola</strong>.' : ''}
+        </p>
+
+        ${escolas.length > 0 ? `
+        <div class="field-group">
+            <label>Selecione uma escola existente</label>
+            <select id="selectEscolaVinculo" style="width:100%;padding:12px 14px;border:1.5px solid var(--border);border-radius:var(--radius);font-size:15px;font-family:var(--font-body);outline:none;">
+                <option value="">— escolha uma escola —</option>
+                ${escolas.map(e => `<option value="${e.id}">${e.nome}${e.cidade ? ' · ' + e.cidade : ''}</option>`).join('')}
+            </select>
+        </div>
+        <button class="btn-primary" onclick="vincularEscolaExistente()" style="margin-bottom:16px;">Vincular a esta escola</button>
+        ${isSuperAdmin ? `<div style="text-align:center;color:var(--text-muted);font-size:13px;margin-bottom:16px;">— ou —</div>` : ''}
+        ` : `
+        <p style="background:var(--primary-light);color:var(--primary);padding:14px;border-radius:10px;font-size:14px;font-weight:600;margin-bottom:16px;">
+            Nenhuma escola cadastrada ainda.
+        </p>
+        `}
+
+        ${isSuperAdmin ? `
+        <button class="btn-outline" onclick="fecharModalSelecionarEscola(); abrirModalNovaEscolaEVincular();" style="width:100%;">
+            + Criar nova escola
+        </button>` : ''}
+
+        <div style="margin-top:16px;text-align:center;">
+            <a href="#" onclick="fazerLogout()" style="font-size:12px;color:var(--text-muted);">Sair da conta</a>
+        </div>
+    </div>`;
+
+    document.body.appendChild(modal);
+}
+
+async function vincularEscolaExistente() {
+    const escolaId = document.getElementById('selectEscolaVinculo')?.value;
+    if (!escolaId) { showToast('Selecione uma escola', 'error'); return; }
+    mostrarLoading(true);
+    try {
+        await updateDoc(doc(db, 'usuarios', usuarioLogado.uid), { escolaId });
+        perfilUsuario.escolaId = escolaId;
+        await carregarEscola();
+        atualizarBrandingEscola();
+        atualizarInterface();
+        fecharModalSelecionarEscola();
+        showToast('Escola vinculada com sucesso! ✅', 'success');
+    } catch(e) {
+        showToast('Erro ao vincular: ' + e.message, 'error');
+    } finally {
+        mostrarLoading(false);
+    }
+}
+
+function fecharModalSelecionarEscola() {
+    document.getElementById('modalSelecionarEscola')?.remove();
+}
+
+// Abre o modal de criar escola e após salvar já vincula o superadmin
+async function abrirModalNovaEscolaEVincular() {
+    _escolaEditandoId   = null;
+    _logoEditandoBase64 = null;
+    _paletaEditando     = PALETAS[0];
+    renderModalEscolaComCallback(async (novoId) => {
+        // Vincular o superadmin à escola recém-criada
+        await updateDoc(doc(db, 'usuarios', usuarioLogado.uid), { escolaId: novoId });
+        perfilUsuario.escolaId = novoId;
+        await carregarEscola();
+        atualizarBrandingEscola();
+        atualizarInterface();
+        fecharModalSelecionarEscola();
+        showToast('Escola criada e vinculada! ✅', 'success');
+    });
 }
 
 function setupEventListeners() {
@@ -814,6 +898,13 @@ async function abrirModalEditarEscola(escolaId) {
     renderModalEscola(snap.data());
 }
 
+let _onEscolaSalvaCallback = null;
+
+function renderModalEscolaComCallback(callback) {
+    _onEscolaSalvaCallback = callback;
+    renderModalEscola(null);
+}
+
 function renderModalEscola(dados) {
     document.getElementById('modalAdmin')?.remove();
 
@@ -1006,14 +1097,22 @@ async function salvarEscola() {
         };
         if (_escolaEditandoId) {
             await updateDoc(doc(db, 'escolas', _escolaEditandoId), dados);
+            showToast('Escola atualizada! ✅', 'success');
+            fecharModalEscola();
+            await carregarEscola();
+            atualizarBrandingEscola();
+            if (_onEscolaSalvaCallback) { await _onEscolaSalvaCallback(_escolaEditandoId); _onEscolaSalvaCallback = null; }
+            else abrirPainelAdmin();
         } else {
-            await setDoc(doc(db, 'escolas', Date.now().toString()), { ...dados, criadoEm: new Date().toISOString() });
+            const novoId = Date.now().toString();
+            await setDoc(doc(db, 'escolas', novoId), { ...dados, criadoEm: new Date().toISOString() });
+            showToast('Escola criada! ✅', 'success');
+            fecharModalEscola();
+            await carregarEscola();
+            atualizarBrandingEscola();
+            if (_onEscolaSalvaCallback) { await _onEscolaSalvaCallback(novoId); _onEscolaSalvaCallback = null; }
+            else abrirPainelAdmin();
         }
-        showToast('Escola salva! ✅', 'success');
-        fecharModalEscola();
-        await carregarEscola();
-        atualizarBrandingEscola();
-        abrirPainelAdmin();
     } catch(e) {
         showToast('Erro: ' + e.message, 'error');
     } finally {
@@ -1318,6 +1417,7 @@ Object.assign(window, {
     abrirPainelAdmin, fecharModalAdmin,
     abrirModalNovaEscola, abrirModalEditarEscola, fecharModalEscola, salvarEscola,
     abrirModalConvidarProfessor,
+    vincularEscolaExistente, fecharModalSelecionarEscola,
     salvarConteudoAula, copiarConteudo, apagarConteudoAula, apagarTodaSemana,
     exportarSemanaDOC, exportarParaDOC,
     showToast
