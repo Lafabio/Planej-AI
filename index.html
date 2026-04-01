@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Planejador Escolar Pro</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="loadingOverlay" class="hidden">Carregando...</div>
+
+    <div id="authContainer" class="login-container">
+        <div class="login-box">
+            <h1 id="authTitle">Acessar Sistema</h1>
+            
+            <div id="loginForm">
+                <input type="email" id="loginEmail" placeholder="Email" required>
+                <input type="password" id="loginPassword" placeholder="Senha" required>
+                <button class="btn-login" onclick="fazerLogin()">Entrar</button>
+                <p onclick="mostrarRecuperacao()" class="link-auth">Esqueci minha senha</p>
+                <p onclick="mostrarCadastro()" class="link-auth">Criar nova conta</p>
+            </div>
+
+            <div id="registerForm" class="hidden">
+                <input type="text" id="regNome" placeholder="Nome Completo">
+                <input type="text" id="regEscola" placeholder="Nome da Escola">
+                <input type="email" id="regEmail" placeholder="Email">
+                <input type="password" id="regPassword" placeholder="Senha (mín. 6 caracteres)">
+                <button class="btn-login" onclick="fazerCadastro()">Cadastrar</button>
+                <p onclick="mostrarLogin()" class="link-auth">Já tenho conta</p>
+            </div>
+
+            <div id="resetForm" class="hidden">
+                <p>Insira seu email para recuperar a senha:</p>
+                <input type="email" id="resetEmail" placeholder="Email">
+                <button class="btn-login" onclick="iniciarRecuperacao()">Enviar Email de Recuperação</button>
+                <p onclick="mostrarLogin()" class="link-auth">Voltar ao login</p>
+            </div>
+        </div>
+    </div>
+
+    <div id="appContainer" class="hidden">
+        <header>
+            <div class="user-info">
+                <span id="userName">Professor</span> | <span id="userSchool">Escola</span>
+            </div>
+            <div class="actions">
+                <button onclick="abrirConfiguracaoHorario()">⚙️ Configurar Grade</button>
+                <button onclick="fazerLogout()" class="btn-logout">Sair</button>
+            </div>
+        </header>
+
+        <main id="mainContent">
+            <div id="gradeSemana"></div>
+        </main>
+    </div>
+
+    <div id="modalHorario" class="modal hidden">
+        <div class="modal-content">
+            <h2>Configurar Padrão da Escola</h2>
+            <div class="form-group">
+                <label>Horário de Início:</label>
+                <input type="time" id="cfgInicio" value="07:30">
+            </div>
+            <div class="form-group">
+                <label>Duração de cada Aula (min):</label>
+                <input type="number" id="cfgDuracao" value="50">
+            </div>
+            <div class="form-group">
+                <label>Número de Aulas:</label>
+                <input type="number" id="cfgNumAulas" value="6">
+            </div>
+            <div class="form-group">
+                <label>Aula do Recreio (após qual aula?):</label>
+                <input type="number" id="cfgAulaRecreio" value="3">
+            </div>
+            <div class="form-group">
+                <label>Duração do Recreio (min):</label>
+                <input type="number" id="cfgDuracaoRecreio" value="20">
+            </div>
+            <div class="modal-buttons">
+                <button onclick="salvarConfiguracoesEscola()">Salvar Grade</button>
+                <button onclick="fecharModalHorario()">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="script.js"></script>
+</body>
+</html>
