@@ -428,7 +428,7 @@ async function carregarDados() {
 async function salvarPlanejamentos() {
     if (!usuarioLogado) return;
     try {
-        await setDoc(doc(db, 'planejamentos', usuarioLogado.uid), { dados: planejamentos });
+        await setDoc(doc(db, 'planejamentos', usuarioLogado.uid), { dados: sanitizarParaFirestore(planejamentos) });
     } catch(e) {
         showToast('Erro ao salvar. Verifique sua conexão.', 'error');
     }
@@ -439,9 +439,13 @@ function salvarPlanejamentosDebounce() {
     saveTimer = setTimeout(salvarPlanejamentos, 1200);
 }
 
+function sanitizarParaFirestore(obj) {
+    return JSON.parse(JSON.stringify(obj, (_, v) => v === undefined ? null : v));
+}
+
 async function salvarHorarioFirestore() {
     if (!usuarioLogado) return;
-    await setDoc(doc(db, 'horarios', usuarioLogado.uid), { grade: horarioProfessor });
+    await setDoc(doc(db, 'horarios', usuarioLogado.uid), { grade: sanitizarParaFirestore(horarioProfessor) });
 }
 
 async function salvarDataInicioLetivo(dataISO) {
