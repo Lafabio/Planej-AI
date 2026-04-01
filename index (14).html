@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EduPlan — Planejador de Aulas</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Fraunces:ital,wght@0,300;0,700;1,300&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════
+     LOADING OVERLAY
+═══════════════════════════════════════════════════ -->
+<div id="loadingOverlay">
+    <div class="loader-ring"></div>
+    <p class="loader-text">Carregando...</p>
+</div>
+
+<!-- ═══════════════════════════════════════════════════
+     TOAST
+═══════════════════════════════════════════════════ -->
+<div id="toastContainer"></div>
+
+<!-- ═══════════════════════════════════════════════════
+     TELA DE LOGIN
+═══════════════════════════════════════════════════ -->
+<div id="telaLogin" class="hidden">
+    <div class="auth-split">
+
+        <!-- Lado esquerdo — branding -->
+        <div class="auth-brand" id="authBrand">
+            <div class="auth-brand-inner">
+                <div class="brand-logo-wrap">
+                    <img id="brandLogo" src="" alt="" class="hidden">
+                    <div id="brandIcon" class="brand-icon">📚</div>
+                </div>
+                <h1 class="brand-title">EduPlan</h1>
+                <p class="brand-sub">Planejamento escolar inteligente e colaborativo</p>
+                <ul class="brand-features">
+                    <li>✦ Horários personalizados por escola</li>
+                    <li>✦ Múltiplos professores e turmas</li>
+                    <li>✦ Exportação em Word</li>
+                    <li>✦ Dados sincronizados na nuvem</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Lado direito — formulários -->
+        <div class="auth-forms">
+            <div class="auth-card">
+
+                <!-- LOGIN -->
+                <div id="loginForm">
+                    <div class="form-header">
+                        <h2>Entrar na conta</h2>
+                        <p>Acesse seu painel de planejamento</p>
+                    </div>
+                    <div class="field-group">
+                        <label>Email</label>
+                        <input type="email" id="loginEmail" placeholder="seu@email.com" autocomplete="email">
+                    </div>
+                    <div class="field-group">
+                        <label>Senha</label>
+                        <div class="input-eye">
+                            <input type="password" id="loginSenha" placeholder="••••••••" autocomplete="current-password">
+                            <button type="button" class="eye-btn" onclick="toggleSenha('loginSenha',this)" aria-label="Mostrar senha">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                            </button>
+                        </div>
+                    </div>
+                    <button class="btn-primary" id="btnEntrar" onclick="fazerLogin()">Entrar</button>
+                    <div class="form-links">
+                        <a href="#" onclick="mostrarRecuperacao()">Esqueci minha senha</a>
+                        <span>·</span>
+                        <a href="#" onclick="mostrarCadastro()">Criar conta</a>
+                    </div>
+                </div>
+
+                <!-- CADASTRO -->
+                <div id="cadastroForm" class="hidden">
+                    <div class="form-header">
+                        <h2>Criar conta</h2>
+                        <p>Junte-se à plataforma de planejamento</p>
+                    </div>
+                    <div class="field-group">
+                        <label>Nome completo</label>
+                        <input type="text" id="cadastroNome" placeholder="Prof. João Silva">
+                    </div>
+                    <div class="field-group">
+                        <label>Email</label>
+                        <input type="email" id="cadastroEmail" placeholder="seu@email.com">
+                    </div>
+                    <div class="field-group">
+                        <label>Escola</label>
+                        <select id="cadastroEscola">
+                            <option value="">Selecione sua escola...</option>
+                        </select>
+                    </div>
+                    <div class="field-group">
+                        <label>Senha</label>
+                        <div class="input-eye">
+                            <input type="password" id="cadastroSenha" placeholder="Mínimo 6 caracteres">
+                            <button type="button" class="eye-btn" onclick="toggleSenha('cadastroSenha',this)" aria-label="Mostrar senha">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                            </button>
+                        </div>
+                        <div class="senha-strength" id="strengthBar"><div class="strength-fill"></div></div>
+                        <div class="strength-label" id="strengthLabel"></div>
+                    </div>
+                    <div class="field-group">
+                        <label>Confirmar senha</label>
+                        <div class="input-eye">
+                            <input type="password" id="cadastroConfirmarSenha" placeholder="Repita a senha">
+                            <button type="button" class="eye-btn" onclick="toggleSenha('cadastroConfirmarSenha',this)" aria-label="Mostrar senha">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                            </button>
+                        </div>
+                    </div>
+                    <button class="btn-primary" id="btnCadastrar" onclick="fazerCadastro()">Criar Conta</button>
+                    <div class="form-links">
+                        <a href="#" onclick="mostrarLogin()">← Voltar ao login</a>
+                    </div>
+                </div>
+
+                <!-- RECUPERAÇÃO -->
+                <div id="recuperacaoForm" class="hidden">
+                    <div class="form-header">
+                        <h2>Recuperar senha</h2>
+                        <p>Enviaremos um link por email</p>
+                    </div>
+                    <div class="field-group">
+                        <label>Email cadastrado</label>
+                        <input type="email" id="recuperacaoEmail" placeholder="seu@email.com">
+                    </div>
+                    <button class="btn-primary" onclick="iniciarRecuperacao()">Enviar link de recuperação</button>
+                    <div class="form-links">
+                        <a href="#" onclick="mostrarLogin()">← Voltar ao login</a>
+                    </div>
+                </div>
+
+            </div><!-- /auth-card -->
+        </div><!-- /auth-forms -->
+    </div><!-- /auth-split -->
+</div><!-- /telaLogin -->
+
+
+<!-- ═══════════════════════════════════════════════════
+     APP PRINCIPAL
+═══════════════════════════════════════════════════ -->
+<div id="appPrincipal" class="hidden">
+
+    <!-- Top bar -->
+    <header class="topbar" id="appTopbar">
+        <div class="topbar-left">
+            <div class="topbar-logo">
+                <img id="topbarLogo" src="" alt="" class="hidden">
+                <span id="topbarIcon">📚</span>
+            </div>
+            <div>
+                <div class="topbar-appname" id="topbarEscolaNome">EduPlan</div>
+                <div class="topbar-user">Olá, <strong id="userCumprimento">Professor</strong></div>
+            </div>
+        </div>
+        <div class="topbar-actions">
+            <button class="tb-btn" onclick="abrirConfiguracaoHorario()">🕐 Meu Horário</button>
+            <button class="tb-btn tb-btn-admin hidden" id="btnAdmin" onclick="abrirPainelAdmin()">⚙️ Admin</button>
+            <button class="tb-btn tb-btn-out" onclick="fazerLogout()">Sair</button>
+        </div>
+    </header>
+
+    <main class="app-main">
+
+        <!-- Controles do topo -->
+        <div class="controls-bar">
+            <div class="control-item">
+                <label>Início do ano letivo</label>
+                <div class="date-row">
+                    <input type="date" id="inicioLetivo">
+                    <button class="btn-ghost" id="btnHoje">Hoje</button>
+                </div>
+            </div>
+            <div class="control-item">
+                <div id="statusHorario" class="status-badge status-warn">⚠️ Configure seu horário primeiro</div>
+            </div>
+            <div class="control-actions">
+                <button class="btn-outline" onclick="exportarParaDOC()">📋 Exportar tudo</button>
+            </div>
+        </div>
+
+        <!-- Semanas -->
+        <div id="paginaSemanas">
+            <div class="section-header">
+                <h2>Semanas Letivas</h2>
+                <span class="badge" id="contadorSemanas">0 semanas</span>
+            </div>
+            <div id="listaSemanas" class="semanas-grid"></div>
+            <div class="hint-box">
+                <p><strong>💡 Como usar:</strong></p>
+                <p>1. Clique em <em>Meu Horário</em> para configurar seu horário semanal</p>
+                <p>2. Defina a data de início do ano letivo</p>
+                <p>3. Clique em uma semana para planejar suas aulas</p>
+                <p>4. Use <em>Exportar</em> para salvar em Word</p>
+            </div>
+        </div>
+
+        <!-- Grade de aulas -->
+        <div id="paginaAulas" class="hidden">
+            <div class="page-aulas-header">
+                <button id="voltar" class="btn-back">← Voltar</button>
+                <div>
+                    <h2 id="tituloSemana"></h2>
+                    <div class="aulas-actions">
+                        <button class="btn-outline" onclick="exportarSemanaDOC()">📄 Exportar semana</button>
+                        <button class="btn-danger" onclick="apagarTodaSemana()">🗑️ Limpar semana</button>
+                    </div>
+                </div>
+            </div>
+            <div id="gradeSemana"></div>
+        </div>
+
+    </main>
+</div><!-- /appPrincipal -->
+
+
+<!-- ═══════════════════════════════════════════════════
+     MODAIS (injetados via JS)
+═══════════════════════════════════════════════════ -->
+
+<!-- Firebase SDK -->
+<script type="module" src="script.js"></script>
+</body>
+</html>
