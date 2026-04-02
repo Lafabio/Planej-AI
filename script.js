@@ -446,9 +446,9 @@ async function carregarDados() {
     try {
         const uid = usuarioLogado.uid;
         const [planSnap, horSnap, confSnap] = await Promise.all([
-            getDoc(doc(db, 'planejamentos', uid)),
-            getDoc(doc(db, 'horarios',      uid)),
-            getDoc(doc(db, 'configuracoes', uid))
+            getDoc(chaveDocumento('planejamentos')),
+            getDoc(chaveDocumento('horarios')),
+            getDoc(doc(db, 'configuracoes', `${uid}_${perfilUsuario?.escolaId || 'sem-escola'}`))
         ]);
         planejamentos    = planSnap.exists() ? desserializarDoFirestore(planSnap.data().dados || {}) : {};
         horarioProfessor = horSnap.exists()  ? desserializarDoFirestore(horSnap.data().grade  || {}) : {};
@@ -470,7 +470,7 @@ async function carregarDados() {
 async function salvarPlanejamentos() {
     if (!usuarioLogado) return;
     try {
-        await setDoc(doc(db, 'planejamentos', usuarioLogado.uid), { dados: sanitizarParaFirestore(planejamentos) });
+        await setDoc(chaveDocumento('planejamentos'), { dados: sanitizarParaFirestore(planejamentos) });
     } catch(e) {
         console.error('Erro ao salvar planejamentos:', e);
         showToast('Erro ao salvar: ' + e.message, 'error');
@@ -482,14 +482,24 @@ function salvarPlanejamentosDebounce() {
     saveTimer = setTimeout(salvarPlanejamentos, 1200);
 }
 
+
+// ──────────────────────────────────────────────────────────
+//  CHAVE DE DADOS: uid + escolaId (independente por escola)
+// ──────────────────────────────────────────────────────────
+function chaveDocumento(colecao) {
+    const uid      = usuarioLogado?.uid || 'anonimo';
+    const escolaId = perfilUsuario?.escolaId || 'sem-escola';
+    return doc(db, colecao, `${uid}_${escolaId}`);
+}
+
 async function salvarHorarioFirestore() {
     if (!usuarioLogado) return;
-    await setDoc(doc(db, 'horarios', usuarioLogado.uid), { grade: sanitizarParaFirestore(horarioProfessor) });
+    await setDoc(chaveDocumento('horarios'), { grade: sanitizarParaFirestore(horarioProfessor) });
 }
 
 async function salvarDataInicioLetivo(dataISO) {
     if (!usuarioLogado) return;
-    await setDoc(doc(db, 'configuracoes', usuarioLogado.uid), { dataInicioLetivo: dataISO }, { merge: true });
+    await setDoc(doc(db, 'configuracoes', `${usuarioLogado.uid}_${perfilUsuario?.escolaId || 'sem-escola'}`), { dataInicioLetivo: dataISO }, { merge: true });
 }
 
 // ──────────────────────────────────────────────────────────
