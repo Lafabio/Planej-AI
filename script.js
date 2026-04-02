@@ -17,7 +17,8 @@ import {
     getAuth, createUserWithEmailAndPassword,
     signInWithEmailAndPassword, signOut,
     onAuthStateChanged, sendPasswordResetEmail,
-    updateProfile
+    updateProfile, reauthenticateWithCredential,
+    EmailAuthProvider, updatePassword
 }                                                from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import {
     getFirestore, doc, setDoc, getDoc, updateDoc,
@@ -126,6 +127,7 @@ let planejamentos    = {};
 let horarioProfessor = {};
 let saveTimer        = null;
 let logoBase64       = null;   // para modal de escola
+let disciplinasPerfil = [];    // disciplinas do professor
 
 // ──────────────────────────────────────────────────────────
 //  HORÁRIOS CALCULADOS DINAMICAMENTE
@@ -662,8 +664,10 @@ async function confirmarTrocaEscola(novaEscolaId, nomeEscola) {
         planejamentos = {};
         horarioProfessor = {};
 
-        // Voltar para a tela de semanas se estiver em aulas
+        // Voltar para a tela de semanas se estiver em aulas ou perfil
         document.getElementById('paginaAulas')?.classList.add('hidden');
+        document.getElementById('paginaPerfil')?.classList.add('hidden');
+        document.getElementById('paginaInicio')?.classList.remove('hidden');
         document.getElementById('paginaSemanas')?.classList.remove('hidden');
         document.getElementById('listaSemanas').innerHTML = '';
         document.getElementById('contadorSemanas').textContent = '0 semanas';
@@ -715,6 +719,7 @@ function setupEventListeners() {
         document.getElementById('paginaAulas').classList.add('hidden');
         document.getElementById('paginaSemanas').classList.remove('hidden');
     });
+
 }
 
 function atualizarInterface() {
@@ -727,6 +732,13 @@ function atualizarInterface() {
     if (btnAdmin) {
         if (isAdmin) btnAdmin.classList.remove('hidden');
         else         btnAdmin.classList.add('hidden');
+    }
+
+    // Atualizar avatar inicial na topbar
+    const avatarEl = document.getElementById('navAvatarInicial');
+    if (avatarEl) {
+        const nome = perfilUsuario?.nome || perfilUsuario?.email || '';
+        avatarEl.textContent = nome.trim().charAt(0).toUpperCase() || '?';
     }
 
     // Atualizar nome da escola na topbar com botão de troca
@@ -1556,6 +1568,180 @@ function exportarParaDOC() {
 // ──────────────────────────────────────────────────────────
 //  EXPOR GLOBALMENTE
 // ──────────────────────────────────────────────────────────
+
+// ──────────────────────────────────────────────────────────
+//  PERFIL DO PROFESSOR
+// ──────────────────────────────────────────────────────────
+function abrirPerfil() {
+    document.getElementById('paginaInicio').classList.add('hidden');
+    document.getElementById('paginaPerfil').classList.remove('hidden');
+    preencherPerfil();
+}
+
+function fecharPerfil() {
+    document.getElementById('paginaPerfil').classList.add('hidden');
+    document.getElementById('paginaInicio').classList.remove('hidden');
+}
+
+function preencherPerfil() {
+    const nome  = perfilUsuario?.nome  || '';
+    const email = perfilUsuario?.email || usuarioLogado?.email || '';
+    const tipo  = perfilUsuario?.tipo  || 'professor';
+    const escola = escolaAtual?.nome   || '—';
+    const inicial = nome.trim().charAt(0).toUpperCase() || email.charAt(0).toUpperCase() || '?';
+
+    // Sidebar identidade
+    const el = id => document.getElementById(id);
+    if (el('perfilAvatarLetra'))   el('perfilAvatarLetra').textContent   = inicial;
+    if (el('navAvatarInicial'))    el('navAvatarInicial').textContent    = inicial;
+    if (el('perfilNomeDisplay'))   el('perfilNomeDisplay').textContent   = nome || '—';
+    if (el('perfilEmailDisplay'))  el('perfilEmailDisplay').textContent  = email;
+    if (el('perfilEscolaChip'))    el('perfilEscolaChip').textContent    = escola;
+    if (el('perfilTipoBadge'))     el('perfilTipoBadge').textContent     = tipo.charAt(0).toUpperCase() + tipo.slice(1);
+
+    // Formulário dados
+    if (el('perfilNome'))          el('perfilNome').value      = nome;
+    if (el('perfilEmailInfo'))     el('perfilEmailInfo').value = email;
+    if (el('perfilEscola'))        el('perfilEscola').value    = escola;
+
+    // Disciplinas
+    disciplinasPerfil = perfilUsuario?.disciplinasProprias || [];
+    renderDisciplinasTags();
+    renderSidebarDisc();
+}
+
+function renderDisciplinasTags() {
+    const container = document.getElementById('perfilDisciplinasTags');
+    if (!container) return;
+    if (disciplinasPerfil.length === 0) {
+        container.innerHTML = '<span style="color:var(--text-muted);font-size:13px;">Nenhuma disciplina adicionada ainda.</span>';
+        return;
+    }
+    container.innerHTML = disciplinasPerfil.map((d, i) => `
+        <span class="perfil-disc-tag">
+            ${d}
+            <button onclick="removerDisciplina(${i})" aria-label="Remover">×</button>
+        </span>
+    `).join('');
+}
+
+function renderSidebarDisc() {
+    const container = document.getElementById('perfilSidebarDisc');
+    if (!container) return;
+    if (disciplinasPerfil.length === 0) { container.innerHTML = ''; return; }
+    container.innerHTML = `
+        <div class="perfil-sidebar-disc-titulo">Disciplinas</div>
+        ${disciplinasPerfil.map(d => `<span class="perfil-sidebar-disc-tag">${d}</span>`).join('')}
+    `;
+}
+
+window.adicionarDisciplina = function() {
+    const inp = document.getElementById('perfilDisciplinaInput');
+    const val = inp?.value.trim();
+    if (!val) return;
+    if (disciplinasPerfil.includes(val)) { showToast('Disciplina já adicionada', 'error'); return; }
+    if (disciplinasPerfil.length >= 15)  { showToast('Máximo de 15 disciplinas', 'error'); return; }
+    disciplinasPerfil.push(val);
+    inp.value = '';
+    renderDisciplinasTags();
+    renderSidebarDisc();
+};
+
+window.removerDisciplina = function(i) {
+    disciplinasPerfil.splice(i, 1);
+    renderDisciplinasTags();
+    renderSidebarDisc();
+};
+
+async function salvarDadosPerfil() {
+    const nome = document.getElementById('perfilNome')?.value.trim();
+    if (!nome) { showToast('Informe seu nome', 'error'); return; }
+    const btn = document.getElementById('btnSalvarDados');
+    if (btn) btn.disabled = true;
+    try {
+        await updateProfile(usuarioLogado, { displayName: nome });
+        await updateDoc(doc(db, 'usuarios', usuarioLogado.uid), { nome });
+        perfilUsuario.nome = nome;
+        preencherPerfil();
+        atualizarInterface();
+        showToast('Dados salvos! ✅', 'success');
+    } catch(e) {
+        showToast('Erro: ' + e.message, 'error');
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
+async function salvarDisciplinas() {
+    try {
+        await updateDoc(doc(db, 'usuarios', usuarioLogado.uid), { disciplinasProprias: disciplinasPerfil });
+        perfilUsuario.disciplinasProprias = disciplinasPerfil;
+        showToast('Disciplinas salvas! ✅', 'success');
+    } catch(e) {
+        showToast('Erro: ' + e.message, 'error');
+    }
+}
+
+window.toggleSenhaPerfil = function(id, btn) {
+    const inp = document.getElementById(id);
+    if (!inp) return;
+    inp.type = inp.type === 'password' ? 'text' : 'password';
+    btn.style.color = inp.type === 'text' ? 'var(--primary)' : '';
+};
+
+window.avaliarForcaSenhaPerfil = function(v) {
+    const barra = document.getElementById('perfilForcaBarra');
+    const texto = document.getElementById('perfilForcaTexto');
+    if (!barra) return;
+    let score = 0;
+    if (v.length >= 6)  score++;
+    if (v.length >= 10) score++;
+    if (/[A-Z]/.test(v)) score++;
+    if (/[0-9]/.test(v)) score++;
+    if (/[^A-Za-z0-9]/.test(v)) score++;
+    const cores  = ['#ef4444','#f97316','#eab308','#22c55e','#16a34a'];
+    const labels = ['Muito fraca','Fraca','Razoável','Boa','Forte'];
+    barra.style.width      = ((score/5)*100) + '%';
+    barra.style.background = cores[score-1] || '#e5e7eb';
+    if (texto) {
+        texto.textContent = v.length ? (labels[score-1] || '') : '';
+        texto.style.color = cores[score-1] || '';
+    }
+};
+
+async function alterarSenhaPerfil() {
+    const atual    = document.getElementById('perfilSenhaAtual')?.value;
+    const nova     = document.getElementById('perfilNovaSenha')?.value;
+    const confirma = document.getElementById('perfilConfirmarSenha')?.value;
+
+    if (!atual || !nova || !confirma) { showToast('Preencha todos os campos de senha', 'error'); return; }
+    if (nova.length < 6)              { showToast('Nova senha muito curta (mín. 6 caracteres)', 'error'); return; }
+    if (nova !== confirma)            { showToast('As senhas não coincidem', 'error'); return; }
+
+    const btn = document.getElementById('btnAlterarSenha');
+    if (btn) btn.disabled = true;
+    try {
+        const cred = EmailAuthProvider.credential(usuarioLogado.email, atual);
+        await reauthenticateWithCredential(usuarioLogado, cred);
+        await updatePassword(usuarioLogado, nova);
+        document.getElementById('perfilSenhaAtual').value    = '';
+        document.getElementById('perfilNovaSenha').value     = '';
+        document.getElementById('perfilConfirmarSenha').value = '';
+        showToast('Senha alterada com sucesso! 🔒', 'success');
+    } catch(e) {
+        const msgs = {
+            'auth/wrong-password':       'Senha atual incorreta.',
+            'auth/invalid-credential':   'Senha atual incorreta.',
+            'auth/too-many-requests':    'Muitas tentativas. Aguarde.',
+            'auth/weak-password':        'Nova senha muito fraca.',
+        };
+        showToast(msgs[e.code] || 'Erro: ' + e.message, 'error');
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
+
 Object.assign(window, {
     fazerLogin, fazerCadastro, fazerLogout,
     iniciarRecuperacao, mostrarLogin, mostrarCadastro, mostrarRecuperacao,
@@ -1566,6 +1752,7 @@ Object.assign(window, {
     abrirModalConvidarProfessor,
     vincularEscolaExistente, fecharModalSelecionarEscola,
     abrirModalTrocarEscola, fecharModalTrocarEscola, confirmarTrocaEscola,
+    abrirPerfil, fecharPerfil, salvarDadosPerfil, salvarDisciplinas, alterarSenhaPerfil,
     salvarConteudoAula, copiarConteudo, apagarConteudoAula, apagarTodaSemana,
     exportarSemanaDOC, exportarParaDOC,
     showToast
