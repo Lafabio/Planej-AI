@@ -50,8 +50,40 @@ const EMAIL_SUPERADMIN = "prof.lafa@gmail.com";
 // ──────────────────────────────────────────────────────────
 //  UTILITÁRIO — SANITIZAR PARA FIRESTORE
 // ──────────────────────────────────────────────────────────
+// Firestore não suporta arrays aninhados — converte array[] em objeto {0:..., 1:..., ...}
 function sanitizarParaFirestore(obj) {
-    return JSON.parse(JSON.stringify(obj, (_, v) => v === undefined ? null : v));
+    if (obj === null || obj === undefined) return null;
+    if (Array.isArray(obj)) {
+        const result = {};
+        obj.forEach((v, i) => { result[String(i)] = sanitizarParaFirestore(v); });
+        return result;
+    }
+    if (typeof obj === 'object') {
+        const result = {};
+        for (const k in obj) {
+            result[k] = sanitizarParaFirestore(obj[k]);
+        }
+        return result;
+    }
+    return obj === undefined ? null : obj;
+}
+
+// Reconverte objetos {0:..., 1:..., ...} de volta para arrays ao carregar do Firestore
+function desserializarDoFirestore(obj) {
+    if (obj === null || obj === undefined) return obj;
+    if (typeof obj !== 'object' || Array.isArray(obj)) return obj;
+    const keys = Object.keys(obj);
+    const isArrayLike = keys.length > 0 && keys.every(k => /^\d+$/.test(k));
+    if (isArrayLike) {
+        const arr = [];
+        keys.forEach(k => { arr[parseInt(k)] = desserializarDoFirestore(obj[k]); });
+        return arr;
+    }
+    const result = {};
+    for (const k in obj) {
+        result[k] = desserializarDoFirestore(obj[k]);
+    }
+    return result;
 }
 
 
@@ -416,8 +448,8 @@ async function carregarDados() {
             getDoc(doc(db, 'horarios',      uid)),
             getDoc(doc(db, 'configuracoes', uid))
         ]);
-        planejamentos    = planSnap.exists() ? (planSnap.data().dados || {}) : {};
-        horarioProfessor = horSnap.exists()  ? (horSnap.data().grade  || {}) : {};
+        planejamentos    = planSnap.exists() ? desserializarDoFirestore(planSnap.data().dados || {}) : {};
+        horarioProfessor = horSnap.exists()  ? desserializarDoFirestore(horSnap.data().grade  || {}) : {};
 
         if (confSnap.exists() && confSnap.data().dataInicioLetivo) {
             const dataInicio = confSnap.data().dataInicioLetivo;
