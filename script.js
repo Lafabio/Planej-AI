@@ -10,7 +10,6 @@
 //    • Paleta de cores por escola (pré-sets + custom)
 //    • Logo da escola por drag & drop
 //    • Painel Admin: gerenciar escolas e usuários
-//    • Perfil do usuário: nome, disciplinas, senha
 // ============================================================
 
 import { initializeApp }                        from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
@@ -18,8 +17,7 @@ import {
     getAuth, createUserWithEmailAndPassword,
     signInWithEmailAndPassword, signOut,
     onAuthStateChanged, sendPasswordResetEmail,
-    updateProfile, updatePassword,
-    EmailAuthProvider, reauthenticateWithCredential
+    updateProfile
 }                                                from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import {
     getFirestore, doc, setDoc, getDoc, updateDoc,
@@ -29,6 +27,7 @@ import {
 
 // ──────────────────────────────────────────────────────────
 //  ⚙️  CONFIGURAÇÃO FIREBASE
+//  Substitua pelos dados do seu projeto no Firebase Console
 // ──────────────────────────────────────────────────────────
 const firebaseConfig = {
     apiKey:            "AIzaSyDQHCEOoFwajMXbFppYnEv2wQs64uiLUF8",
@@ -44,13 +43,14 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 
 // ──────────────────────────────────────────────────────────
-//  EMAIL DO SUPER-ADMINISTRADOR
+//  EMAIL DO SUPER-ADMINISTRADOR (cria escolas, gerencia tudo)
 // ──────────────────────────────────────────────────────────
 const EMAIL_SUPERADMIN = "prof.lafa@gmail.com";
 
 // ──────────────────────────────────────────────────────────
 //  UTILITÁRIO — SANITIZAR PARA FIRESTORE
 // ──────────────────────────────────────────────────────────
+// Firestore não suporta arrays aninhados — converte array[] em objeto {0:..., 1:..., ...}
 function sanitizarParaFirestore(obj) {
     if (obj === null || obj === undefined) return null;
     if (Array.isArray(obj)) {
@@ -68,6 +68,7 @@ function sanitizarParaFirestore(obj) {
     return obj === undefined ? null : obj;
 }
 
+// Reconverte objetos {0:..., 1:..., ...} de volta para arrays ao carregar do Firestore
 function desserializarDoFirestore(obj) {
     if (obj === null || obj === undefined) return obj;
     if (typeof obj !== 'object' || Array.isArray(obj)) return obj;
@@ -85,17 +86,18 @@ function desserializarDoFirestore(obj) {
     return result;
 }
 
+
 // ──────────────────────────────────────────────────────────
 //  PALETAS PRÉ-DEFINIDAS
 // ──────────────────────────────────────────────────────────
 const PALETAS = [
-    { id: 'azul',     nome: 'Azul Clássico',   primary: '#0047B6', primaryDark: '#003490', accent: '#F2B817' },
-    { id: 'verde',    nome: 'Verde Natureza',   primary: '#1a6b3c', primaryDark: '#14532d', accent: '#f59e0b' },
-    { id: 'roxo',     nome: 'Roxo Criativo',    primary: '#6d28d9', primaryDark: '#4c1d95', accent: '#f472b6' },
-    { id: 'vermelho', nome: 'Vermelho Forte',   primary: '#b91c1c', primaryDark: '#7f1d1d', accent: '#fbbf24' },
-    { id: 'laranja',  nome: 'Laranja Vibrante', primary: '#c2410c', primaryDark: '#7c2d12', accent: '#06b6d4' },
-    { id: 'grafite',  nome: 'Grafite Moderno',  primary: '#1e293b', primaryDark: '#0f172a', accent: '#38bdf8' },
-    { id: 'custom',   nome: 'Personalizado',    primary: '#0047B6', primaryDark: '#003490', accent: '#F2B817' },
+    { id: 'azul',     nome: 'Azul Clássico', primary: '#0047B6', primaryDark: '#003490', accent: '#F2B817' },
+    { id: 'verde',    nome: 'Verde Natureza', primary: '#1a6b3c', primaryDark: '#14532d', accent: '#f59e0b' },
+    { id: 'roxo',     nome: 'Roxo Criativo',  primary: '#6d28d9', primaryDark: '#4c1d95', accent: '#f472b6' },
+    { id: 'vermelho', nome: 'Vermelho Forte',  primary: '#b91c1c', primaryDark: '#7f1d1d', accent: '#fbbf24' },
+    { id: 'laranja',  nome: 'Laranja Vibrante',primary: '#c2410c', primaryDark: '#7c2d12', accent: '#06b6d4' },
+    { id: 'grafite',  nome: 'Grafite Moderno', primary: '#1e293b', primaryDark: '#0f172a', accent: '#38bdf8' },
+    { id: 'custom',   nome: 'Personalizado',   primary: '#0047B6', primaryDark: '#003490', accent: '#F2B817' },
 ];
 
 const DISCIPLINAS_PADRAO = [
@@ -117,28 +119,26 @@ const DIAS_COMPLETO = ['Segunda-feira','Terça-feira','Quarta-feira','Quinta-fei
 // ──────────────────────────────────────────────────────────
 let usuarioLogado    = null;
 let perfilUsuario    = null;
-let escolaAtual      = null;
+let escolaAtual      = null;   // dados da escola do usuário
 let semanas          = [];
 let semanaAtual      = -1;
 let planejamentos    = {};
 let horarioProfessor = {};
 let saveTimer        = null;
-let logoBase64       = null;
-
-// Estado do perfil
-let _perfilDisciplinas = [];
+let logoBase64       = null;   // para modal de escola
 
 // ──────────────────────────────────────────────────────────
 //  HORÁRIOS CALCULADOS DINAMICAMENTE
 // ──────────────────────────────────────────────────────────
 function calcularHorarios(config) {
+    // config: { horaInicio, duracaoAula, numAulas, duracaoRecreo, posicaoRecreo }
     const horarios = [];
     const breaks   = [];
     let [h, m] = (config.horaInicio || '07:15').split(':').map(Number);
     const dur  = parseInt(config.duracaoAula   || 45);
     const nAu  = parseInt(config.numAulas       || 7);
     const durR = parseInt(config.duracaoRecreo  || 15);
-    const posR = parseInt(config.posicaoRecreo  || 3);
+    const posR = parseInt(config.posicaoRecreo  || 3);  // após qual aula vem o recreio
 
     for (let i = 0; i < nAu; i++) {
         const ini = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
@@ -149,6 +149,7 @@ function calcularHorarios(config) {
         breaks.push(false);
 
         if (i === posR - 1 && posR < nAu) {
+            // intervalo/recreio
             breaks.push(true);
             horarios.push(`RECREIO (${durR} min)`);
             m += durR;
@@ -183,10 +184,10 @@ function setBtn(id, disabled) {
 function aplicarTema(paleta) {
     if (!paleta) return;
     const r = document.documentElement.style;
-    r.setProperty('--primary',       paleta.primary      || '#0047B6');
-    r.setProperty('--primary-dark',  paleta.primaryDark  || '#003490');
+    r.setProperty('--primary',      paleta.primary      || '#0047B6');
+    r.setProperty('--primary-dark', paleta.primaryDark  || '#003490');
     r.setProperty('--primary-light', hexAlpha(paleta.primary || '#0047B6', .1));
-    r.setProperty('--accent',        paleta.accent       || '#F2B817');
+    r.setProperty('--accent',       paleta.accent       || '#F2B817');
 }
 
 function hexAlpha(hex, alpha) {
@@ -196,16 +197,8 @@ function hexAlpha(hex, alpha) {
     return `rgba(${r},${g},${b},${alpha})`;
 }
 
-function _escaparHtml(str) {
-    return String(str)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
-}
-
 // ──────────────────────────────────────────────────────────
-//  TOGGLE DE SENHA (olho) — login/cadastro
+//  TOGGLE DE SENHA (olho)
 // ──────────────────────────────────────────────────────────
 window.toggleSenha = function(id, btn) {
     const inp = document.getElementById(id);
@@ -216,7 +209,7 @@ window.toggleSenha = function(id, btn) {
 };
 
 // ──────────────────────────────────────────────────────────
-//  FORÇA DA SENHA (cadastro)
+//  FORÇA DA SENHA
 // ──────────────────────────────────────────────────────────
 function setupStrengthMeter() {
     const inp   = document.getElementById('cadastroSenha');
@@ -231,7 +224,7 @@ function setupStrengthMeter() {
         if (/[A-Z]/.test(v)) score++;
         if (/[0-9]/.test(v)) score++;
         if (/[^A-Za-z0-9]/.test(v)) score++;
-        const pct    = (score / 5) * 100;
+        const pct   = (score / 5) * 100;
         const cores  = ['#ef4444','#f97316','#eab308','#22c55e','#16a34a'];
         const labels = ['Muito fraca','Fraca','Razoável','Boa','Forte'];
         fill.style.width      = pct + '%';
@@ -318,14 +311,20 @@ async function fazerLogin() {
 //  CADASTRO
 // ──────────────────────────────────────────────────────────
 async function fazerCadastro() {
-    const nome  = document.getElementById('cadastroNome').value.trim();
-    const email = document.getElementById('cadastroEmail').value.trim();
-    const senha = document.getElementById('cadastroSenha').value;
-    const conf  = document.getElementById('cadastroConfirmarSenha').value;
+    const nome    = document.getElementById('cadastroNome').value.trim();
+    const email   = document.getElementById('cadastroEmail').value.trim();
+    const senha   = document.getElementById('cadastroSenha').value;
+    const conf    = document.getElementById('cadastroConfirmarSenha').value;
 
-    if (!nome || !email || !senha || !conf) { showToast('Preencha todos os campos', 'error'); return; }
-    if (senha.length < 6) { showToast('A senha deve ter pelo menos 6 caracteres', 'error'); return; }
-    if (senha !== conf)   { showToast('As senhas não coincidem', 'error'); return; }
+    if (!nome || !email || !senha || !conf) {
+        showToast('Preencha todos os campos', 'error'); return;
+    }
+    if (senha.length < 6) {
+        showToast('A senha deve ter pelo menos 6 caracteres', 'error'); return;
+    }
+    if (senha !== conf) {
+        showToast('As senhas não coincidem', 'error'); return;
+    }
 
     setBtn('btnCadastrar', true);
     mostrarLoading(true);
@@ -334,9 +333,8 @@ async function fazerCadastro() {
         await updateProfile(cred.user, { displayName: nome });
         await setDoc(doc(db, 'usuarios', cred.user.uid), {
             nome, email,
-            escolaId:    null,
-            tipo:        email === EMAIL_SUPERADMIN ? 'superadmin' : 'professor',
-            disciplinas: [],
+            escolaId: null,   // será definida após o login
+            tipo: email === EMAIL_SUPERADMIN ? 'superadmin' : 'professor',
             dataCadastro: new Date().toISOString()
         });
         showToast('Conta criada com sucesso! 🎉', 'success');
@@ -390,10 +388,9 @@ async function carregarPerfil() {
             perfilUsuario = snap.data();
         } else {
             perfilUsuario = {
-                nome:        usuarioLogado.displayName || usuarioLogado.email,
-                email:       usuarioLogado.email,
-                tipo:        usuarioLogado.email === EMAIL_SUPERADMIN ? 'superadmin' : 'professor',
-                disciplinas: [],
+                nome: usuarioLogado.displayName || usuarioLogado.email,
+                email: usuarioLogado.email,
+                tipo: usuarioLogado.email === EMAIL_SUPERADMIN ? 'superadmin' : 'professor',
                 dataCadastro: new Date().toISOString()
             };
             await setDoc(doc(db, 'usuarios', usuarioLogado.uid), perfilUsuario);
@@ -418,8 +415,10 @@ async function carregarEscola() {
 
 function atualizarBrandingEscola() {
     if (!escolaAtual) return;
+    // Topbar
     const nomeEl = document.getElementById('topbarEscolaNome');
     if (nomeEl) nomeEl.textContent = escolaAtual.nome || 'EduPlan';
+    // Logo topbar
     const topLogo = document.getElementById('topbarLogo');
     const topIcon = document.getElementById('topbarIcon');
     if (escolaAtual.logoBase64) {
@@ -427,6 +426,7 @@ function atualizarBrandingEscola() {
         topLogo.classList.remove('hidden');
         if (topIcon) topIcon.style.display = 'none';
     }
+    // Brand na tela de login (se ainda visível)
     const brandLogo = document.getElementById('brandLogo');
     const brandIcon = document.getElementById('brandIcon');
     if (brandLogo && escolaAtual.logoBase64) {
@@ -494,19 +494,19 @@ async function salvarDataInicioLetivo(dataISO) {
 //  INICIAR APLICAÇÃO
 // ──────────────────────────────────────────────────────────
 function iniciarAplicacao() {
-    document.getElementById('telaLogin').classList.remove('hidden');
     document.getElementById('telaLogin').classList.add('hidden');
     document.getElementById('appPrincipal').classList.remove('hidden');
     setupEventListeners();
     atualizarInterface();
 
+    // Se o usuário não tem escola vinculada, exibir seleção obrigatória
     if (!perfilUsuario?.escolaId) {
         abrirModalSelecionarEscola();
     }
 }
 
 // ──────────────────────────────────────────────────────────
-//  MODAL — SELECIONAR ESCOLA
+//  MODAL — SELECIONAR ESCOLA (pós-login, obrigatório)
 // ──────────────────────────────────────────────────────────
 async function abrirModalSelecionarEscola() {
     mostrarLoading(true);
@@ -521,8 +521,9 @@ async function abrirModalSelecionarEscola() {
 
     const modal = document.createElement('div');
     modal.id = 'modalSelecionarEscola';
+    // Sem botão de fechar — é obrigatório
     modal.className = 'modal-backdrop';
-    modal.style.cssText = 'z-index:2000;';
+    modal.style.cssText = 'z-index:2000;'; // acima de tudo
 
     modal.innerHTML = `
     <div class="modal-box modal-sm">
@@ -586,11 +587,109 @@ function fecharModalSelecionarEscola() {
     document.getElementById('modalSelecionarEscola')?.remove();
 }
 
+// ──────────────────────────────────────────────────────────
+//  TROCAR DE ESCOLA (professor logado)
+// ──────────────────────────────────────────────────────────
+async function abrirModalTrocarEscola() {
+    mostrarLoading(true);
+    let escolas = [];
+    try {
+        const snap = await getDocs(collection(db, 'escolas'));
+        snap.forEach(d => escolas.push({ id: d.id, ...d.data() }));
+    } catch(e) { showToast('Erro ao carregar escolas: ' + e.message, 'error'); }
+    mostrarLoading(false);
+
+    if (escolas.length === 0) {
+        showToast('Nenhuma escola disponível.', 'error'); return;
+    }
+
+    const modal = document.createElement('div');
+    modal.id = 'modalTrocarEscola';
+    modal.className = 'modal-backdrop';
+    modal.innerHTML = `
+    <div class="modal-box modal-sm">
+        <div class="modal-header">
+            <h3>⇄ Trocar de Escola</h3>
+            <button class="modal-close" onclick="fecharModalTrocarEscola()">✕</button>
+        </div>
+        <p style="color:var(--text-muted);margin-bottom:18px;font-size:14px;line-height:1.6;">
+            Selecione a escola para a qual deseja migrar. Seu horário e planejamentos desta escola serão salvos.
+        </p>
+        <div class="escolas-lista-troca">
+            ${escolas.map(e => `
+            <div class="escola-troca-card ${e.id === perfilUsuario?.escolaId ? 'escola-atual' : ''}"
+                 onclick="${e.id === perfilUsuario?.escolaId ? '' : `confirmarTrocaEscola('${e.id}', '${e.nome}')`}">
+                <div class="escola-troca-icon">
+                    ${e.logoBase64
+                        ? `<img src="${e.logoBase64}" style="width:40px;height:40px;object-fit:contain;border-radius:6px;">`
+                        : `<span style="font-size:28px;">🏫</span>`}
+                </div>
+                <div class="escola-troca-info">
+                    <strong>${e.nome}</strong>
+                    <small>${[e.cidade, e.estado].filter(Boolean).join(' · ') || 'Sem localização'}</small>
+                </div>
+                <div class="escola-troca-badge">
+                    ${e.id === perfilUsuario?.escolaId
+                        ? `<span class="badge-atual">✓ Atual</span>`
+                        : `<span class="badge-ir">Entrar →</span>`}
+                </div>
+            </div>`).join('')}
+        </div>
+        <div class="modal-footer">
+            <button class="btn-cancel" onclick="fecharModalTrocarEscola()">Fechar</button>
+        </div>
+    </div>`;
+
+    document.body.appendChild(modal);
+}
+
+function fecharModalTrocarEscola() {
+    document.getElementById('modalTrocarEscola')?.remove();
+}
+
+async function confirmarTrocaEscola(novaEscolaId, nomeEscola) {
+    if (!confirm(`Trocar para "${nomeEscola}"?\n\nSeu horário e planejamentos atuais ficarão salvos e serão carregados ao voltar para esta escola.`)) return;
+    fecharModalTrocarEscola();
+    mostrarLoading(true);
+    try {
+        // Salvar escola atual no perfil
+        await updateDoc(doc(db, 'usuarios', usuarioLogado.uid), { escolaId: novaEscolaId });
+        perfilUsuario.escolaId = novaEscolaId;
+
+        // Resetar estado local
+        semanas       = [];
+        semanaAtual   = -1;
+        planejamentos = {};
+        horarioProfessor = {};
+
+        // Voltar para a tela de semanas se estiver em aulas
+        document.getElementById('paginaAulas')?.classList.add('hidden');
+        document.getElementById('paginaSemanas')?.classList.remove('hidden');
+        document.getElementById('listaSemanas').innerHTML = '';
+        document.getElementById('contadorSemanas').textContent = '0 semanas';
+        document.getElementById('inicioLetivo').value = '';
+
+        // Carregar dados da nova escola
+        await carregarEscola();
+        await carregarDados();
+        atualizarBrandingEscola();
+        atualizarInterface();
+
+        showToast(`✅ Bem-vindo à ${nomeEscola}!`, 'success');
+    } catch(e) {
+        showToast('Erro ao trocar escola: ' + e.message, 'error');
+    } finally {
+        mostrarLoading(false);
+    }
+}
+
+// Abre o modal de criar escola e após salvar já vincula o superadmin
 async function abrirModalNovaEscolaEVincular() {
     _escolaEditandoId   = null;
     _logoEditandoBase64 = null;
     _paletaEditando     = PALETAS[0];
     renderModalEscolaComCallback(async (novoId) => {
+        // Vincular o superadmin à escola recém-criada
         await updateDoc(doc(db, 'usuarios', usuarioLogado.uid), { escolaId: novoId });
         perfilUsuario.escolaId = novoId;
         await carregarEscola();
@@ -622,17 +721,23 @@ function atualizarInterface() {
     const el = document.getElementById('userCumprimento');
     if (el) el.textContent = (perfilUsuario?.nome || '').split(' ')[0] || 'Professor';
 
-    // Avatar no botão de perfil da topbar
-    const inicial = (perfilUsuario?.nome || perfilUsuario?.email || '?')[0].toUpperCase();
-    const navAvatar = document.getElementById('navAvatarInicial');
-    if (navAvatar) navAvatar.textContent = inicial;
-
     const btnAdmin = document.getElementById('btnAdmin');
-    const isAdmin  = perfilUsuario?.tipo === 'admin' || perfilUsuario?.tipo === 'superadmin';
+    const isSuperAdmin = perfilUsuario?.tipo === 'superadmin';
+    const isAdmin      = perfilUsuario?.tipo === 'admin' || isSuperAdmin;
     if (btnAdmin) {
         if (isAdmin) btnAdmin.classList.remove('hidden');
         else         btnAdmin.classList.add('hidden');
     }
+
+    // Atualizar nome da escola na topbar com botão de troca
+    const nomeEl = document.getElementById('topbarEscolaNome');
+    if (nomeEl) {
+        nomeEl.innerHTML = `
+            <span>${escolaAtual?.nome || 'EduPlan'}</span>
+            <button class="btn-trocar-escola" onclick="abrirModalTrocarEscola()" title="Trocar de escola">⇄</button>
+        `;
+    }
+
     atualizarStatusHorario();
 }
 
@@ -650,292 +755,6 @@ function atualizarStatusHorario() {
         el.textContent = `✅ Horário configurado — ${total} aulas/semana`;
         el.className   = 'status-badge status-ok';
     }
-}
-
-// ══════════════════════════════════════════════════════════
-//  PERFIL DO USUÁRIO
-// ══════════════════════════════════════════════════════════
-
-function abrirPerfil() {
-    document.getElementById('paginaInicio').classList.add('hidden');
-    document.getElementById('paginaPerfil').classList.remove('hidden');
-    carregarDadosPerfil();
-}
-
-function fecharPerfil() {
-    document.getElementById('paginaPerfil').classList.add('hidden');
-    document.getElementById('paginaInicio').classList.remove('hidden');
-}
-
-async function carregarDadosPerfil() {
-    try {
-        const uid = auth.currentUser?.uid;
-        if (!uid) return;
-
-        const docUsuario = await getDoc(doc(db, 'usuarios', uid));
-        const dados = docUsuario.exists() ? docUsuario.data() : {};
-
-        const nome  = dados.nome  || auth.currentUser.displayName || '';
-        const email = auth.currentUser.email || dados.email || '';
-        const tipo  = dados.tipo  || 'professor';
-
-        // Sidebar de identidade
-        document.getElementById('perfilNomeDisplay').textContent  = nome  || '(sem nome)';
-        document.getElementById('perfilEmailDisplay').textContent = email || '—';
-        document.getElementById('perfilTipoBadge').textContent    = _labelTipo(tipo);
-        document.getElementById('perfilAvatarLetra').textContent  = (nome || email || '?')[0].toUpperCase();
-
-        // Escola
-        let nomeEscola = '—';
-        if (dados.escolaId) {
-            const docEscola = await getDoc(doc(db, 'escolas', dados.escolaId));
-            if (docEscola.exists()) nomeEscola = docEscola.data().nome || '—';
-        }
-        document.getElementById('perfilEscolaChip').textContent = nomeEscola;
-        document.getElementById('perfilEscola').value          = nomeEscola;
-
-        // Campos editáveis
-        document.getElementById('perfilNome').value      = nome;
-        document.getElementById('perfilEmailInfo').value = email;
-
-        // Disciplinas
-        _perfilDisciplinas = Array.isArray(dados.disciplinas) ? [...dados.disciplinas] : [];
-        _renderizarTagsDisciplinas();
-        _renderizarSidebarDisc();
-
-        // Limpa campos de senha
-        ['perfilSenhaAtual', 'perfilNovaSenha', 'perfilConfirmarSenha'].forEach(id => {
-            const el = document.getElementById(id);
-            if (el) el.value = '';
-        });
-        _resetForcaSenhaPerfil();
-
-    } catch (err) {
-        console.error('Erro ao carregar perfil:', err);
-        showToast('Erro ao carregar perfil: ' + err.message, 'error');
-    }
-}
-
-async function salvarDadosPerfil() {
-    const btn  = document.getElementById('btnSalvarDados');
-    const nome = document.getElementById('perfilNome').value.trim();
-
-    if (!nome) {
-        showToast('Por favor, informe seu nome.', 'error');
-        document.getElementById('perfilNome').focus();
-        return;
-    }
-
-    try {
-        btn.disabled = true;
-        btn.textContent = 'Salvando…';
-
-        const uid = auth.currentUser.uid;
-        await updateDoc(doc(db, 'usuarios', uid), { nome });
-        await updateProfile(auth.currentUser, { displayName: nome });
-
-        // Atualiza estado global
-        if (perfilUsuario) perfilUsuario.nome = nome;
-
-        // Atualiza UI
-        document.getElementById('perfilNomeDisplay').textContent = nome;
-        document.getElementById('perfilAvatarLetra').textContent = nome[0].toUpperCase();
-        const navAvatar = document.getElementById('navAvatarInicial');
-        if (navAvatar) navAvatar.textContent = nome[0].toUpperCase();
-        const cumprimento = document.getElementById('userCumprimento');
-        if (cumprimento) cumprimento.textContent = nome.split(' ')[0];
-
-        showToast('Dados salvos com sucesso! ✅', 'success');
-    } catch (err) {
-        console.error('Erro ao salvar dados:', err);
-        showToast('Erro ao salvar: ' + err.message, 'error');
-    } finally {
-        btn.disabled = false;
-        btn.innerHTML = `
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
-                <polyline points="17 21 17 13 7 13 7 21"/>
-                <polyline points="7 3 7 8 15 8"/>
-            </svg>
-            Salvar dados`;
-    }
-}
-
-// ── Disciplinas ───────────────────────────────────────────
-function adicionarDisciplina() {
-    const input = document.getElementById('perfilDisciplinaInput');
-    const valor = input.value.trim();
-    if (!valor) return;
-
-    if (_perfilDisciplinas.some(d => d.toLowerCase() === valor.toLowerCase())) {
-        showToast('Essa disciplina já foi adicionada.', 'error');
-        return;
-    }
-
-    _perfilDisciplinas.push(valor);
-    input.value = '';
-    input.focus();
-    _renderizarTagsDisciplinas();
-    _renderizarSidebarDisc();
-}
-
-function removerDisciplina(index) {
-    _perfilDisciplinas.splice(index, 1);
-    _renderizarTagsDisciplinas();
-    _renderizarSidebarDisc();
-}
-
-function _renderizarTagsDisciplinas() {
-    const container = document.getElementById('perfilDisciplinasTags');
-    if (!container) return;
-    container.innerHTML = '';
-
-    if (_perfilDisciplinas.length === 0) {
-        container.innerHTML = '<span class="perfil-tags-vazio">Nenhuma disciplina adicionada ainda.</span>';
-        return;
-    }
-
-    _perfilDisciplinas.forEach((disciplina, i) => {
-        const tag = document.createElement('span');
-        tag.className = 'perfil-tag';
-        tag.innerHTML = `
-            ${_escaparHtml(disciplina)}
-            <button class="perfil-tag-remover" onclick="removerDisciplina(${i})" aria-label="Remover ${_escaparHtml(disciplina)}">
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round">
-                    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-                </svg>
-            </button>`;
-        container.appendChild(tag);
-    });
-}
-
-function _renderizarSidebarDisc() {
-    const container = document.getElementById('perfilSidebarDisc');
-    if (!container) return;
-
-    if (_perfilDisciplinas.length === 0) {
-        container.innerHTML = '';
-        return;
-    }
-
-    container.innerHTML = `
-        <div class="sidebar-disc-titulo">Disciplinas</div>
-        <div class="sidebar-disc-lista">
-            ${_perfilDisciplinas.map(d => `<span class="sidebar-disc-item">${_escaparHtml(d)}</span>`).join('')}
-        </div>`;
-}
-
-async function salvarDisciplinas() {
-    try {
-        const uid = auth.currentUser.uid;
-        await updateDoc(doc(db, 'usuarios', uid), { disciplinas: _perfilDisciplinas });
-        if (perfilUsuario) perfilUsuario.disciplinas = _perfilDisciplinas;
-        showToast('Disciplinas salvas! ✅', 'success');
-    } catch (err) {
-        showToast('Erro ao salvar disciplinas: ' + err.message, 'error');
-    }
-}
-
-// ── Segurança / Alterar senha ─────────────────────────────
-async function alterarSenhaPerfil() {
-    const btn          = document.getElementById('btnAlterarSenha');
-    const senhaAtual   = document.getElementById('perfilSenhaAtual').value;
-    const novaSenha    = document.getElementById('perfilNovaSenha').value;
-    const confirmar    = document.getElementById('perfilConfirmarSenha').value;
-
-    if (!senhaAtual || !novaSenha || !confirmar) {
-        showToast('Preencha todos os campos de senha.', 'error'); return;
-    }
-    if (novaSenha.length < 6) {
-        showToast('A nova senha deve ter no mínimo 6 caracteres.', 'error'); return;
-    }
-    if (novaSenha !== confirmar) {
-        showToast('As senhas não conferem.', 'error');
-        document.getElementById('perfilConfirmarSenha').focus();
-        return;
-    }
-
-    try {
-        btn.disabled = true;
-        btn.textContent = 'Alterando…';
-
-        const user       = auth.currentUser;
-        const credencial = EmailAuthProvider.credential(user.email, senhaAtual);
-        await reauthenticateWithCredential(user, credencial);
-        await updatePassword(user, novaSenha);
-
-        ['perfilSenhaAtual', 'perfilNovaSenha', 'perfilConfirmarSenha'].forEach(id => {
-            const el = document.getElementById(id);
-            if (el) el.value = '';
-        });
-        _resetForcaSenhaPerfil();
-
-        showToast('Senha alterada com sucesso! ✅', 'success');
-    } catch (err) {
-        console.error('Erro ao alterar senha:', err);
-        const msg = err.code === 'auth/wrong-password'
-            ? 'Senha atual incorreta.'
-            : 'Erro ao alterar senha: ' + err.message;
-        showToast(msg, 'error');
-    } finally {
-        btn.disabled = false;
-        btn.innerHTML = `
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-            </svg>
-            Alterar senha`;
-    }
-}
-
-// ── Força da senha no perfil ──────────────────────────────
-window.avaliarForcaSenhaPerfil = function(senha) {
-    const barra = document.getElementById('perfilForcaBarra');
-    const texto = document.getElementById('perfilForcaTexto');
-    if (!barra || !texto) return;
-
-    let pontos = 0;
-    if (senha.length >= 6)  pontos++;
-    if (senha.length >= 10) pontos++;
-    if (/[A-Z]/.test(senha)) pontos++;
-    if (/[0-9]/.test(senha)) pontos++;
-    if (/[^A-Za-z0-9]/.test(senha)) pontos++;
-
-    const niveis = [
-        { label: '',           cor: 'transparent', pct: '0%'   },
-        { label: 'Muito fraca',cor: '#ef4444',     pct: '20%'  },
-        { label: 'Fraca',      cor: '#f97316',     pct: '40%'  },
-        { label: 'Razoável',   cor: '#eab308',     pct: '60%'  },
-        { label: 'Boa',        cor: '#22c55e',     pct: '80%'  },
-        { label: 'Forte',      cor: '#16a34a',     pct: '100%' },
-    ];
-
-    const nivel = niveis[Math.min(pontos, 5)];
-    barra.style.width      = senha ? nivel.pct : '0%';
-    barra.style.background = nivel.cor;
-    texto.textContent      = senha ? nivel.label : '';
-};
-
-function _resetForcaSenhaPerfil() {
-    const barra = document.getElementById('perfilForcaBarra');
-    const texto = document.getElementById('perfilForcaTexto');
-    if (barra) { barra.style.width = '0%'; barra.style.background = 'transparent'; }
-    if (texto) texto.textContent = '';
-}
-
-// ── Toggle senha no perfil ────────────────────────────────
-window.toggleSenhaPerfil = function(inputId, btn) {
-    const input = document.getElementById(inputId);
-    if (!input) return;
-    const mostrar = input.type === 'password';
-    input.type    = mostrar ? 'text' : 'password';
-    btn.style.opacity = mostrar ? '1' : '.5';
-};
-
-// ── Helpers ───────────────────────────────────────────────
-function _labelTipo(tipo) {
-    const mapa = { superadmin: 'Superadmin', admin: 'Administrador', professor: 'Professor' };
-    return mapa[tipo] || 'Professor';
 }
 
 // ──────────────────────────────────────────────────────────
@@ -1002,11 +821,11 @@ function abrirConfiguracaoHorario() {
 
 function lerConfigHorario() {
     return {
-        horaInicio:    document.getElementById('cfgHoraInicio')?.value     || '07:15',
-        duracaoAula:   parseInt(document.getElementById('cfgDuracao')?.value      || 45),
-        numAulas:      parseInt(document.getElementById('cfgNumAulas')?.value     || 7),
-        duracaoRecreo: parseInt(document.getElementById('cfgDuracaoRecreo')?.value || 15),
-        posicaoRecreo: parseInt(document.getElementById('cfgPosicaoRecreo')?.value || 3),
+        horaInicio:     document.getElementById('cfgHoraInicio')?.value    || '07:15',
+        duracaoAula:    parseInt(document.getElementById('cfgDuracao')?.value     || 45),
+        numAulas:       parseInt(document.getElementById('cfgNumAulas')?.value    || 7),
+        duracaoRecreo:  parseInt(document.getElementById('cfgDuracaoRecreo')?.value || 15),
+        posicaoRecreo:  parseInt(document.getElementById('cfgPosicaoRecreo')?.value || 3),
     };
 }
 
@@ -1016,21 +835,24 @@ function renderGradeHorario() {
     const container = document.getElementById('gradeHorario');
     if (!container) return;
 
-    const cfg = lerConfigHorario();
+    const cfg    = lerConfigHorario();
     const { horarios, breaks } = calcularHorarios(cfg);
     const disciplinas = escolaAtual?.disciplinas || DISCIPLINAS_PADRAO;
     const turmas      = escolaAtual?.turmas      || TURMAS_PADRAO;
-    const ncols       = 6;
+    const ncols       = 6; // horario + 5 dias
 
     container.style.gridTemplateColumns = `90px repeat(5, 1fr)`;
 
+    // Cabeçalho
     let html = `<div class="gh-head">Horário</div>`;
     DIAS_SEMANA.forEach(d => { html += `<div class="gh-head">${d}</div>`; });
 
     horarios.forEach((hor, i) => {
         if (breaks[i]) {
+            // linha de recreio
             html += `<div class="gh-break" style="grid-column: span ${ncols};">☕ ${hor}</div>`;
         } else {
+            // linha normal — descobrir índice real de aula (sem recreios)
             const aulaIdx = horarios.slice(0, i+1).filter((_,j) => !breaks[j]).length - 1;
             html += `<div class="gh-time">${hor}</div>`;
             DIAS_SEMANA.forEach(dia => {
@@ -1075,6 +897,7 @@ async function salvarHorario() {
     mostrarLoading(true);
     try {
         await salvarHorarioFirestore();
+        // Salvar config de horário na escola se for admin
         if ((perfilUsuario?.tipo === 'admin' || perfilUsuario?.tipo === 'superadmin') && perfilUsuario?.escolaId) {
             await updateDoc(doc(db, 'escolas', perfilUsuario.escolaId), { configHorario: cfg });
             if (escolaAtual) escolaAtual.configHorario = cfg;
@@ -1094,8 +917,8 @@ function aplicarHorarioNasSemanas() {
     semanas.forEach((_, i) => {
         const chave = `semana_${i}`;
         if (planejamentos[chave]) {
-            const nova   = criarGradeBaseadaNoHorario();
-            const antiga = planejamentos[chave].aulas;
+            const nova    = criarGradeBaseadaNoHorario();
+            const antiga  = planejamentos[chave].aulas;
             for (let d = 0; d < 5; d++)
                 for (let a = 0; a < nova[d].length; a++)
                     if (antiga[d]?.[a]?.conteudo) nova[d][a].conteudo = antiga[d][a].conteudo;
@@ -1130,8 +953,12 @@ async function abrirPainelAdmin() {
     mostrarLoading(false);
 
     const isSuperAdmin = tipo === 'superadmin';
-    const escolasFiltradas   = isSuperAdmin ? escolas   : escolas.filter(e => e.id === perfilUsuario.escolaId);
-    const usuariosFiltrados  = isSuperAdmin ? usuarios  : usuarios.filter(u => u.escolaId === perfilUsuario.escolaId);
+    const escolasFiltradas = isSuperAdmin
+        ? escolas
+        : escolas.filter(e => e.id === perfilUsuario.escolaId);
+    const usuariosFiltrados = isSuperAdmin
+        ? usuarios
+        : usuarios.filter(u => u.escolaId === perfilUsuario.escolaId);
 
     const modal = document.createElement('div');
     modal.id = 'modalAdmin';
@@ -1349,6 +1176,7 @@ window.handleLogoFile = function(file) {
         _logoEditandoBase64 = e.target.result;
         const dz = document.getElementById('dropzoneLogo');
         if (dz) {
+            // Substituir conteúdo do dropzone pela preview
             const input = dz.querySelector('input');
             dz.innerHTML = `<img src="${_logoEditandoBase64}" class="logo-preview" id="logoPreview" alt="Logo">`;
             if (input) dz.appendChild(input);
@@ -1397,11 +1225,11 @@ window.atualizarCustomPaleta = function() {
 };
 
 async function salvarEscola() {
-    const nome      = document.getElementById('escolaNome')?.value.trim();
-    const cidade    = document.getElementById('escolaCidade')?.value.trim();
-    const estado    = document.getElementById('escolaEstado')?.value.trim();
+    const nome   = document.getElementById('escolaNome')?.value.trim();
+    const cidade = document.getElementById('escolaCidade')?.value.trim();
+    const estado = document.getElementById('escolaEstado')?.value.trim();
     const turmasRaw = document.getElementById('escolaTurmas')?.value || '';
-    const turmas    = turmasRaw.split(',').map(t => t.trim()).filter(Boolean);
+    const turmas = turmasRaw.split(',').map(t => t.trim()).filter(Boolean);
 
     if (!nome) { showToast('Informe o nome da escola', 'error'); return; }
 
@@ -1409,10 +1237,10 @@ async function salvarEscola() {
     try {
         const dados = {
             nome, cidade, estado, turmas,
-            paleta:      _paletaEditando || PALETAS[0],
-            logoBase64:  _logoEditandoBase64 || null,
-            disciplinas: DISCIPLINAS_PADRAO,
-            updatedAt:   new Date().toISOString()
+            paleta: _paletaEditando || PALETAS[0],
+            logoBase64: _logoEditandoBase64 || null,
+            disciplinas: DISCIPLINAS_PADRAO, // poderá ser editável no futuro
+            updatedAt: new Date().toISOString()
         };
         if (_escolaEditandoId) {
             await updateDoc(doc(db, 'escolas', _escolaEditandoId), dados);
@@ -1443,6 +1271,7 @@ function fecharModalEscola() {
     document.getElementById('modalEscola')?.remove();
 }
 
+// Convidar professor — mostra link/instrução simples
 function abrirModalConvidarProfessor() {
     const modal = document.createElement('div');
     modal.id = 'modalConvite';
@@ -1480,8 +1309,10 @@ async function gerarSemanas(dataISO) {
     }
     semanas = [];
     const data = new Date(dataISO + 'T12:00:00');
-    const dow  = data.getDay();
+    // Ajustar para segunda-feira
+    const dow = data.getDay();
     if (dow !== 1) {
+        const diff = dow === 0 ? 1 : (8 - dow) % 7 || 7;
         data.setDate(data.getDate() + (dow === 0 ? 1 : 2 - dow));
     }
     for (let i = 0; i < 43; i++) {
@@ -1562,6 +1393,7 @@ function renderGradeSemana(index) {
 
     let html = `<div class="grade-wrapper"><div class="grade-table" style="grid-template-columns:110px repeat(5,1fr);">`;
 
+    // Cabeçalho
     html += `<div class="grade-head-cell">Horário</div>`;
     DIAS_COMPLETO.forEach((dia, i) => {
         const data = new Date(semana.inicio); data.setDate(data.getDate() + i);
@@ -1725,24 +1557,16 @@ function exportarParaDOC() {
 //  EXPOR GLOBALMENTE
 // ──────────────────────────────────────────────────────────
 Object.assign(window, {
-    // Auth
     fazerLogin, fazerCadastro, fazerLogout,
     iniciarRecuperacao, mostrarLogin, mostrarCadastro, mostrarRecuperacao,
-    // Horário
     abrirConfiguracaoHorario, fecharModalHorario, salvarHorario,
     atualizarDisciplinaHorario, atualizarTurmaHorario, atualizarGradeHorario,
-    // Admin
     abrirPainelAdmin, fecharModalAdmin,
     abrirModalNovaEscola, abrirModalEditarEscola, fecharModalEscola, salvarEscola,
     abrirModalConvidarProfessor,
     vincularEscolaExistente, fecharModalSelecionarEscola,
-    // Planejamento
+    abrirModalTrocarEscola, fecharModalTrocarEscola, confirmarTrocaEscola,
     salvarConteudoAula, copiarConteudo, apagarConteudoAula, apagarTodaSemana,
     exportarSemanaDOC, exportarParaDOC,
-    // Perfil
-    abrirPerfil, fecharPerfil,
-    salvarDadosPerfil, salvarDisciplinas, alterarSenhaPerfil,
-    adicionarDisciplina, removerDisciplina,
-    // Utilitários
     showToast
 });
