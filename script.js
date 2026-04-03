@@ -1,6 +1,15 @@
 // ============================================================
-//  EDUPLAN — script.js  (revisado)
+//  EDUPLAN — script.js
 //  Firebase Auth + Firestore | Multiusuário | Multiescola
+//  Funcionalidades:
+//    • Login/Cadastro/Recuperação de senha seguro
+//    • Visualizar senha (toggle)
+//    • Força da senha em tempo real
+//    • Múltiplas escolas com horários próprios
+//    • Configuração de horário: nº de aulas, recreio, hora início, duração
+//    • Paleta de cores por escola (pré-sets + custom)
+//    • Logo da escola por drag & drop
+//    • Painel Admin: gerenciar escolas e usuários
 // ============================================================
 
 import { initializeApp }                        from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
@@ -8,7 +17,8 @@ import {
     getAuth, createUserWithEmailAndPassword,
     signInWithEmailAndPassword, signOut,
     onAuthStateChanged, sendPasswordResetEmail,
-    updateProfile
+    updateProfile, reauthenticateWithCredential,
+    EmailAuthProvider, updatePassword
 }                                                from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import {
     getFirestore, doc, setDoc, getDoc, updateDoc,
@@ -18,14 +28,15 @@ import {
 
 // ──────────────────────────────────────────────────────────
 //  ⚙️  CONFIGURAÇÃO FIREBASE
+//  Substitua pelos dados do seu projeto no Firebase Console
 // ──────────────────────────────────────────────────────────
 const firebaseConfig = {
-    apiKey: "AIzaSyDQHCEOoFwajMXbFppYnEv2wQs64uiLUF8",
-    authDomain: "eduplan-app-abfeb.firebaseapp.com",
-    projectId: "eduplan-app-abfeb",
-    storageBucket: "eduplan-app-abfeb.firebasestorage.app",
+    apiKey:            "AIzaSyDQHCEOoFwajMXbFppYnEv2wQs64uiLUF8",
+    authDomain:        "eduplan-app-abfeb.firebaseapp.com",
+    projectId:         "eduplan-app-abfeb",
+    storageBucket:     "eduplan-app-abfeb.firebasestorage.app",
     messagingSenderId: "278323138478",
-    appId: "1:278323138478:web:bf5d17c3bbda8c4ce5823f"
+    appId:             "1:278323138478:web:bf5d17c3bbda8c4ce5823f"
 };
 
 const app  = initializeApp(firebaseConfig);
@@ -33,24 +44,63 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 
 // ──────────────────────────────────────────────────────────
-//  EMAIL DO SUPER-ADMINISTRADOR
+//  EMAIL DO SUPER-ADMINISTRADOR (cria escolas, gerencia tudo)
 // ──────────────────────────────────────────────────────────
 const EMAIL_SUPERADMIN = "prof.lafa@gmail.com";
+
+// ──────────────────────────────────────────────────────────
+//  UTILITÁRIO — SANITIZAR PARA FIRESTORE
+// ──────────────────────────────────────────────────────────
+// Firestore não suporta arrays aninhados — converte array[] em objeto {0:..., 1:..., ...}
+function sanitizarParaFirestore(obj) {
+    if (obj === null || obj === undefined) return null;
+    if (Array.isArray(obj)) {
+        const result = {};
+        obj.forEach((v, i) => { result[String(i)] = sanitizarParaFirestore(v); });
+        return result;
+    }
+    if (typeof obj === 'object') {
+        const result = {};
+        for (const k in obj) {
+            result[k] = sanitizarParaFirestore(obj[k]);
+        }
+        return result;
+    }
+    return obj === undefined ? null : obj;
+}
+
+// Reconverte objetos {0:..., 1:..., ...} de volta para arrays ao carregar do Firestore
+function desserializarDoFirestore(obj) {
+    if (obj === null || obj === undefined) return obj;
+    if (typeof obj !== 'object' || Array.isArray(obj)) return obj;
+    const keys = Object.keys(obj);
+    const isArrayLike = keys.length > 0 && keys.every(k => /^\d+$/.test(k));
+    if (isArrayLike) {
+        const arr = [];
+        keys.forEach(k => { arr[parseInt(k)] = desserializarDoFirestore(obj[k]); });
+        return arr;
+    }
+    const result = {};
+    for (const k in obj) {
+        result[k] = desserializarDoFirestore(obj[k]);
+    }
+    return result;
+}
+
 
 // ──────────────────────────────────────────────────────────
 //  PALETAS PRÉ-DEFINIDAS
 // ──────────────────────────────────────────────────────────
 const PALETAS = [
-    { id: 'azul',     nome: 'Azul Clássico',   primary: '#0047B6', primaryDark: '#003490', accent: '#F2B817' },
-    { id: 'verde',    nome: 'Verde Natureza',   primary: '#1a6b3c', primaryDark: '#14532d', accent: '#f59e0b' },
-    { id: 'roxo',     nome: 'Roxo Criativo',    primary: '#6d28d9', primaryDark: '#4c1d95', accent: '#f472b6' },
-    { id: 'vermelho', nome: 'Vermelho Forte',   primary: '#b91c1c', primaryDark: '#7f1d1d', accent: '#fbbf24' },
-    { id: 'laranja',  nome: 'Laranja Vibrante', primary: '#c2410c', primaryDark: '#7c2d12', accent: '#06b6d4' },
-    { id: 'grafite',  nome: 'Grafite Moderno',  primary: '#1e293b', primaryDark: '#0f172a', accent: '#38bdf8' },
-    { id: 'custom',   nome: 'Personalizado',    primary: '#0047B6', primaryDark: '#003490', accent: '#F2B817' },
+    { id: 'azul',     nome: 'Azul Clássico', primary: '#0047B6', primaryDark: '#003490', accent: '#F2B817' },
+    { id: 'verde',    nome: 'Verde Natureza', primary: '#1a6b3c', primaryDark: '#14532d', accent: '#f59e0b' },
+    { id: 'roxo',     nome: 'Roxo Criativo',  primary: '#6d28d9', primaryDark: '#4c1d95', accent: '#f472b6' },
+    { id: 'vermelho', nome: 'Vermelho Forte',  primary: '#b91c1c', primaryDark: '#7f1d1d', accent: '#fbbf24' },
+    { id: 'laranja',  nome: 'Laranja Vibrante',primary: '#c2410c', primaryDark: '#7c2d12', accent: '#06b6d4' },
+    { id: 'grafite',  nome: 'Grafite Moderno', primary: '#1e293b', primaryDark: '#0f172a', accent: '#38bdf8' },
+    { id: 'custom',   nome: 'Personalizado',   primary: '#0047B6', primaryDark: '#003490', accent: '#F2B817' },
 ];
 
-// Disciplinas padrão (fallback quando escola não tem personalização)
 const DISCIPLINAS_PADRAO = [
     { id: "biologia",             nome: "Biologia",             icone: "🧬" },
     { id: "biohackeria",          nome: "Biohackeria",          icone: "🔬" },
@@ -61,34 +111,36 @@ const DISCIPLINAS_PADRAO = [
     { id: "outra",                nome: "Outra",                icone: "📝" }
 ];
 
-const TURMAS_PADRAO   = ['101','102','201','202','301','302'];
-const DIAS_SEMANA     = ['SEG','TER','QUA','QUI','SEX'];
-const DIAS_COMPLETO   = ['Segunda-feira','Terça-feira','Quarta-feira','Quinta-feira','Sexta-feira'];
+const TURMAS_PADRAO = ['101','102','201','202','301','302'];
+const DIAS_SEMANA   = ['SEG','TER','QUA','QUI','SEX'];
+const DIAS_COMPLETO = ['Segunda-feira','Terça-feira','Quarta-feira','Quinta-feira','Sexta-feira'];
 
 // ──────────────────────────────────────────────────────────
 //  ESTADO GLOBAL
 // ──────────────────────────────────────────────────────────
 let usuarioLogado    = null;
 let perfilUsuario    = null;
-let escolaAtual      = null;
+let escolaAtual      = null;   // dados da escola do usuário
 let semanas          = [];
 let semanaAtual      = -1;
 let planejamentos    = {};
 let horarioProfessor = {};
 let saveTimer        = null;
-let logoBase64       = null;
+let logoBase64       = null;   // para modal de escola
+let disciplinasPerfil = [];    // disciplinas do professor
 
 // ──────────────────────────────────────────────────────────
 //  HORÁRIOS CALCULADOS DINAMICAMENTE
 // ──────────────────────────────────────────────────────────
 function calcularHorarios(config) {
+    // config: { horaInicio, duracaoAula, numAulas, duracaoRecreo, posicaoRecreo }
     const horarios = [];
     const breaks   = [];
     let [h, m] = (config.horaInicio || '07:15').split(':').map(Number);
     const dur  = parseInt(config.duracaoAula   || 45);
     const nAu  = parseInt(config.numAulas       || 7);
     const durR = parseInt(config.duracaoRecreo  || 15);
-    const posR = parseInt(config.posicaoRecreo  || 3);
+    const posR = parseInt(config.posicaoRecreo  || 3);  // após qual aula vem o recreio
 
     for (let i = 0; i < nAu; i++) {
         const ini = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
@@ -99,6 +151,7 @@ function calcularHorarios(config) {
         breaks.push(false);
 
         if (i === posR - 1 && posR < nAu) {
+            // intervalo/recreio
             breaks.push(true);
             horarios.push(`RECREIO (${durR} min)`);
             m += durR;
@@ -118,16 +171,11 @@ function mostrarLoading(show = true) {
 
 function showToast(msg, tipo = '') {
     const c = document.getElementById('toastContainer');
-    if (!c) return;
     const t = document.createElement('div');
     t.className = 'toast ' + tipo;
     t.textContent = msg;
     c.appendChild(t);
-    setTimeout(() => {
-        t.style.opacity = '0';
-        t.style.transition = 'opacity .3s';
-        setTimeout(() => t.remove(), 300);
-    }, 3500);
+    setTimeout(() => { t.style.opacity='0'; t.style.transition='opacity .3s'; setTimeout(()=>t.remove(),300); }, 3500);
 }
 
 function setBtn(id, disabled) {
@@ -138,10 +186,10 @@ function setBtn(id, disabled) {
 function aplicarTema(paleta) {
     if (!paleta) return;
     const r = document.documentElement.style;
-    r.setProperty('--primary',       paleta.primary      || '#0047B6');
-    r.setProperty('--primary-dark',  paleta.primaryDark  || '#003490');
+    r.setProperty('--primary',      paleta.primary      || '#0047B6');
+    r.setProperty('--primary-dark', paleta.primaryDark  || '#003490');
     r.setProperty('--primary-light', hexAlpha(paleta.primary || '#0047B6', .1));
-    r.setProperty('--accent',        paleta.accent       || '#F2B817');
+    r.setProperty('--accent',       paleta.accent       || '#F2B817');
 }
 
 function hexAlpha(hex, alpha) {
@@ -151,17 +199,8 @@ function hexAlpha(hex, alpha) {
     return `rgba(${r},${g},${b},${alpha})`;
 }
 
-// Gera id único a partir do nome da disciplina
-function slugify(str) {
-    return str.toLowerCase()
-        .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
-        .replace(/[^a-z0-9]+/g,'_')
-        .replace(/^_|_$/g,'')
-        + '_' + Date.now().toString(36);
-}
-
 // ──────────────────────────────────────────────────────────
-//  TOGGLE DE SENHA
+//  TOGGLE DE SENHA (olho)
 // ──────────────────────────────────────────────────────────
 window.toggleSenha = function(id, btn) {
     const inp = document.getElementById(id);
@@ -182,12 +221,12 @@ function setupStrengthMeter() {
     inp.addEventListener('input', () => {
         const v = inp.value;
         let score = 0;
-        if (v.length >= 6)          score++;
-        if (v.length >= 10)         score++;
-        if (/[A-Z]/.test(v))        score++;
-        if (/[0-9]/.test(v))        score++;
+        if (v.length >= 6)  score++;
+        if (v.length >= 10) score++;
+        if (/[A-Z]/.test(v)) score++;
+        if (/[0-9]/.test(v)) score++;
         if (/[^A-Za-z0-9]/.test(v)) score++;
-        const pct    = (score / 5) * 100;
+        const pct   = (score / 5) * 100;
         const cores  = ['#ef4444','#f97316','#eab308','#22c55e','#16a34a'];
         const labels = ['Muito fraca','Fraca','Razoável','Boa','Forte'];
         fill.style.width      = pct + '%';
@@ -260,11 +299,11 @@ async function fazerLogin() {
         mostrarLoading(false);
         setBtn('btnEntrar', false);
         const msgs = {
-            'auth/user-not-found':     'Usuário não encontrado.',
-            'auth/wrong-password':     'Senha incorreta.',
-            'auth/invalid-email':      'Email inválido.',
-            'auth/invalid-credential': 'Email ou senha inválidos.',
-            'auth/too-many-requests':  'Muitas tentativas. Aguarde e tente novamente.'
+            'auth/user-not-found':    'Usuário não encontrado.',
+            'auth/wrong-password':    'Senha incorreta.',
+            'auth/invalid-email':     'Email inválido.',
+            'auth/invalid-credential':'Email ou senha inválidos.',
+            'auth/too-many-requests': 'Muitas tentativas. Aguarde e tente novamente.'
         };
         showToast(msgs[e.code] || 'Erro ao entrar: ' + e.message, 'error');
     }
@@ -274,14 +313,20 @@ async function fazerLogin() {
 //  CADASTRO
 // ──────────────────────────────────────────────────────────
 async function fazerCadastro() {
-    const nome  = document.getElementById('cadastroNome').value.trim();
-    const email = document.getElementById('cadastroEmail').value.trim();
-    const senha = document.getElementById('cadastroSenha').value;
-    const conf  = document.getElementById('cadastroConfirmarSenha').value;
+    const nome    = document.getElementById('cadastroNome').value.trim();
+    const email   = document.getElementById('cadastroEmail').value.trim();
+    const senha   = document.getElementById('cadastroSenha').value;
+    const conf    = document.getElementById('cadastroConfirmarSenha').value;
 
-    if (!nome || !email || !senha || !conf) { showToast('Preencha todos os campos', 'error'); return; }
-    if (senha.length < 6) { showToast('A senha deve ter pelo menos 6 caracteres', 'error'); return; }
-    if (senha !== conf)   { showToast('As senhas não coincidem', 'error'); return; }
+    if (!nome || !email || !senha || !conf) {
+        showToast('Preencha todos os campos', 'error'); return;
+    }
+    if (senha.length < 6) {
+        showToast('A senha deve ter pelo menos 6 caracteres', 'error'); return;
+    }
+    if (senha !== conf) {
+        showToast('As senhas não coincidem', 'error'); return;
+    }
 
     setBtn('btnCadastrar', true);
     mostrarLoading(true);
@@ -290,9 +335,8 @@ async function fazerCadastro() {
         await updateProfile(cred.user, { displayName: nome });
         await setDoc(doc(db, 'usuarios', cred.user.uid), {
             nome, email,
-            escolaId:    null,
-            tipo:        email === EMAIL_SUPERADMIN ? 'superadmin' : 'professor',
-            disciplinas: [],   // disciplinas do professor (personalizáveis)
+            escolaId: null,   // será definida após o login
+            tipo: email === EMAIL_SUPERADMIN ? 'superadmin' : 'professor',
             dataCadastro: new Date().toISOString()
         });
         showToast('Conta criada com sucesso! 🎉', 'success');
@@ -346,16 +390,13 @@ async function carregarPerfil() {
             perfilUsuario = snap.data();
         } else {
             perfilUsuario = {
-                nome:        usuarioLogado.displayName || usuarioLogado.email,
-                email:       usuarioLogado.email,
-                tipo:        usuarioLogado.email === EMAIL_SUPERADMIN ? 'superadmin' : 'professor',
-                disciplinas: [],
+                nome: usuarioLogado.displayName || usuarioLogado.email,
+                email: usuarioLogado.email,
+                tipo: usuarioLogado.email === EMAIL_SUPERADMIN ? 'superadmin' : 'professor',
                 dataCadastro: new Date().toISOString()
             };
             await setDoc(doc(db, 'usuarios', usuarioLogado.uid), perfilUsuario);
         }
-        // Garante que o campo existe mesmo em perfis antigos
-        if (!perfilUsuario.disciplinas) perfilUsuario.disciplinas = [];
     } catch(e) { console.error('Perfil:', e); }
 }
 
@@ -376,15 +417,18 @@ async function carregarEscola() {
 
 function atualizarBrandingEscola() {
     if (!escolaAtual) return;
+    // Topbar
     const nomeEl = document.getElementById('topbarEscolaNome');
     if (nomeEl) nomeEl.textContent = escolaAtual.nome || 'EduPlan';
+    // Logo topbar
     const topLogo = document.getElementById('topbarLogo');
     const topIcon = document.getElementById('topbarIcon');
-    if (escolaAtual.logoBase64 && topLogo) {
+    if (escolaAtual.logoBase64) {
         topLogo.src = escolaAtual.logoBase64;
         topLogo.classList.remove('hidden');
         if (topIcon) topIcon.style.display = 'none';
     }
+    // Brand na tela de login (se ainda visível)
     const brandLogo = document.getElementById('brandLogo');
     const brandIcon = document.getElementById('brandIcon');
     if (brandLogo && escolaAtual.logoBase64) {
@@ -402,12 +446,12 @@ async function carregarDados() {
     try {
         const uid = usuarioLogado.uid;
         const [planSnap, horSnap, confSnap] = await Promise.all([
-            getDoc(doc(db, 'planejamentos', uid)),
-            getDoc(doc(db, 'horarios',      uid)),
-            getDoc(doc(db, 'configuracoes', uid))
+            getDoc(chaveDocumento('planejamentos')),
+            getDoc(chaveDocumento('horarios')),
+            getDoc(doc(db, 'configuracoes', `${uid}_${perfilUsuario?.escolaId || 'sem-escola'}`))
         ]);
-        planejamentos    = planSnap.exists() ? (planSnap.data().dados || {}) : {};
-        horarioProfessor = horSnap.exists()  ? (horSnap.data().grade  || {}) : {};
+        planejamentos    = planSnap.exists() ? desserializarDoFirestore(planSnap.data().dados || {}) : {};
+        horarioProfessor = horSnap.exists()  ? desserializarDoFirestore(horSnap.data().grade  || {}) : {};
 
         if (confSnap.exists() && confSnap.data().dataInicioLetivo) {
             const dataInicio = confSnap.data().dataInicioLetivo;
@@ -426,9 +470,10 @@ async function carregarDados() {
 async function salvarPlanejamentos() {
     if (!usuarioLogado) return;
     try {
-        await setDoc(doc(db, 'planejamentos', usuarioLogado.uid), { dados: planejamentos });
+        await setDoc(chaveDocumento('planejamentos'), { dados: sanitizarParaFirestore(planejamentos) });
     } catch(e) {
-        showToast('Erro ao salvar. Verifique sua conexão.', 'error');
+        console.error('Erro ao salvar planejamentos:', e);
+        showToast('Erro ao salvar: ' + e.message, 'error');
     }
 }
 
@@ -437,14 +482,24 @@ function salvarPlanejamentosDebounce() {
     saveTimer = setTimeout(salvarPlanejamentos, 1200);
 }
 
+
+// ──────────────────────────────────────────────────────────
+//  CHAVE DE DADOS: uid + escolaId (independente por escola)
+// ──────────────────────────────────────────────────────────
+function chaveDocumento(colecao) {
+    const uid      = usuarioLogado?.uid || 'anonimo';
+    const escolaId = perfilUsuario?.escolaId || 'sem-escola';
+    return doc(db, colecao, `${uid}_${escolaId}`);
+}
+
 async function salvarHorarioFirestore() {
     if (!usuarioLogado) return;
-    await setDoc(doc(db, 'horarios', usuarioLogado.uid), { grade: horarioProfessor });
+    await setDoc(chaveDocumento('horarios'), { grade: sanitizarParaFirestore(horarioProfessor) });
 }
 
 async function salvarDataInicioLetivo(dataISO) {
     if (!usuarioLogado) return;
-    await setDoc(doc(db, 'configuracoes', usuarioLogado.uid), { dataInicioLetivo: dataISO }, { merge: true });
+    await setDoc(doc(db, 'configuracoes', `${usuarioLogado.uid}_${perfilUsuario?.escolaId || 'sem-escola'}`), { dataInicioLetivo: dataISO }, { merge: true });
 }
 
 // ──────────────────────────────────────────────────────────
@@ -456,6 +511,7 @@ function iniciarAplicacao() {
     setupEventListeners();
     atualizarInterface();
 
+    // Se o usuário não tem escola vinculada, exibir seleção obrigatória
     if (!perfilUsuario?.escolaId) {
         abrirModalSelecionarEscola();
     }
@@ -474,10 +530,12 @@ async function abrirModalSelecionarEscola() {
     mostrarLoading(false);
 
     const isSuperAdmin = perfilUsuario?.tipo === 'superadmin';
+
     const modal = document.createElement('div');
     modal.id = 'modalSelecionarEscola';
+    // Sem botão de fechar — é obrigatório
     modal.className = 'modal-backdrop';
-    modal.style.cssText = 'z-index:2000;';
+    modal.style.cssText = 'z-index:2000;'; // acima de tudo
 
     modal.innerHTML = `
     <div class="modal-box modal-sm">
@@ -541,11 +599,111 @@ function fecharModalSelecionarEscola() {
     document.getElementById('modalSelecionarEscola')?.remove();
 }
 
+// ──────────────────────────────────────────────────────────
+//  TROCAR DE ESCOLA (professor logado)
+// ──────────────────────────────────────────────────────────
+async function abrirModalTrocarEscola() {
+    mostrarLoading(true);
+    let escolas = [];
+    try {
+        const snap = await getDocs(collection(db, 'escolas'));
+        snap.forEach(d => escolas.push({ id: d.id, ...d.data() }));
+    } catch(e) { showToast('Erro ao carregar escolas: ' + e.message, 'error'); }
+    mostrarLoading(false);
+
+    if (escolas.length === 0) {
+        showToast('Nenhuma escola disponível.', 'error'); return;
+    }
+
+    const modal = document.createElement('div');
+    modal.id = 'modalTrocarEscola';
+    modal.className = 'modal-backdrop';
+    modal.innerHTML = `
+    <div class="modal-box modal-sm">
+        <div class="modal-header">
+            <h3>⇄ Trocar de Escola</h3>
+            <button class="modal-close" onclick="fecharModalTrocarEscola()">✕</button>
+        </div>
+        <p style="color:var(--text-muted);margin-bottom:18px;font-size:14px;line-height:1.6;">
+            Selecione a escola para a qual deseja migrar. Seu horário e planejamentos desta escola serão salvos.
+        </p>
+        <div class="escolas-lista-troca">
+            ${escolas.map(e => `
+            <div class="escola-troca-card ${e.id === perfilUsuario?.escolaId ? 'escola-atual' : ''}"
+                 onclick="${e.id === perfilUsuario?.escolaId ? '' : `confirmarTrocaEscola('${e.id}', '${e.nome}')`}">
+                <div class="escola-troca-icon">
+                    ${e.logoBase64
+                        ? `<img src="${e.logoBase64}" style="width:40px;height:40px;object-fit:contain;border-radius:6px;">`
+                        : `<span style="font-size:28px;">🏫</span>`}
+                </div>
+                <div class="escola-troca-info">
+                    <strong>${e.nome}</strong>
+                    <small>${[e.cidade, e.estado].filter(Boolean).join(' · ') || 'Sem localização'}</small>
+                </div>
+                <div class="escola-troca-badge">
+                    ${e.id === perfilUsuario?.escolaId
+                        ? `<span class="badge-atual">✓ Atual</span>`
+                        : `<span class="badge-ir">Entrar →</span>`}
+                </div>
+            </div>`).join('')}
+        </div>
+        <div class="modal-footer">
+            <button class="btn-cancel" onclick="fecharModalTrocarEscola()">Fechar</button>
+        </div>
+    </div>`;
+
+    document.body.appendChild(modal);
+}
+
+function fecharModalTrocarEscola() {
+    document.getElementById('modalTrocarEscola')?.remove();
+}
+
+async function confirmarTrocaEscola(novaEscolaId, nomeEscola) {
+    if (!confirm(`Trocar para "${nomeEscola}"?\n\nSeu horário e planejamentos atuais ficarão salvos e serão carregados ao voltar para esta escola.`)) return;
+    fecharModalTrocarEscola();
+    mostrarLoading(true);
+    try {
+        // Salvar escola atual no perfil
+        await updateDoc(doc(db, 'usuarios', usuarioLogado.uid), { escolaId: novaEscolaId });
+        perfilUsuario.escolaId = novaEscolaId;
+
+        // Resetar estado local
+        semanas       = [];
+        semanaAtual   = -1;
+        planejamentos = {};
+        horarioProfessor = {};
+
+        // Voltar para a tela de semanas se estiver em aulas ou perfil
+        document.getElementById('paginaAulas')?.classList.add('hidden');
+        document.getElementById('paginaPerfil')?.classList.add('hidden');
+        document.getElementById('paginaInicio')?.classList.remove('hidden');
+        document.getElementById('paginaSemanas')?.classList.remove('hidden');
+        document.getElementById('listaSemanas').innerHTML = '';
+        document.getElementById('contadorSemanas').textContent = '0 semanas';
+        document.getElementById('inicioLetivo').value = '';
+
+        // Carregar dados da nova escola
+        await carregarEscola();
+        await carregarDados();
+        atualizarBrandingEscola();
+        atualizarInterface();
+
+        showToast(`✅ Bem-vindo à ${nomeEscola}!`, 'success');
+    } catch(e) {
+        showToast('Erro ao trocar escola: ' + e.message, 'error');
+    } finally {
+        mostrarLoading(false);
+    }
+}
+
+// Abre o modal de criar escola e após salvar já vincula o superadmin
 async function abrirModalNovaEscolaEVincular() {
     _escolaEditandoId   = null;
     _logoEditandoBase64 = null;
     _paletaEditando     = PALETAS[0];
     renderModalEscolaComCallback(async (novoId) => {
+        // Vincular o superadmin à escola recém-criada
         await updateDoc(doc(db, 'usuarios', usuarioLogado.uid), { escolaId: novoId });
         perfilUsuario.escolaId = novoId;
         await carregarEscola();
@@ -556,9 +714,6 @@ async function abrirModalNovaEscolaEVincular() {
     });
 }
 
-// ──────────────────────────────────────────────────────────
-//  EVENT LISTENERS
-// ──────────────────────────────────────────────────────────
 function setupEventListeners() {
     const inicioLetivo = document.getElementById('inicioLetivo');
     const btnHoje      = document.getElementById('btnHoje');
@@ -574,19 +729,37 @@ function setupEventListeners() {
         document.getElementById('paginaAulas').classList.add('hidden');
         document.getElementById('paginaSemanas').classList.remove('hidden');
     });
+
 }
 
 function atualizarInterface() {
     const el = document.getElementById('userCumprimento');
     if (el) el.textContent = (perfilUsuario?.nome || '').split(' ')[0] || 'Professor';
 
-    const btnAdmin     = document.getElementById('btnAdmin');
+    const btnAdmin = document.getElementById('btnAdmin');
     const isSuperAdmin = perfilUsuario?.tipo === 'superadmin';
     const isAdmin      = perfilUsuario?.tipo === 'admin' || isSuperAdmin;
     if (btnAdmin) {
         if (isAdmin) btnAdmin.classList.remove('hidden');
         else         btnAdmin.classList.add('hidden');
     }
+
+    // Atualizar avatar inicial na topbar
+    const avatarEl = document.getElementById('navAvatarInicial');
+    if (avatarEl) {
+        const nome = perfilUsuario?.nome || perfilUsuario?.email || '';
+        avatarEl.textContent = nome.trim().charAt(0).toUpperCase() || '?';
+    }
+
+    // Atualizar nome da escola na topbar com botão de troca
+    const nomeEl = document.getElementById('topbarEscolaNome');
+    if (nomeEl) {
+        nomeEl.innerHTML = `
+            <span>${escolaAtual?.nome || 'EduPlan'}</span>
+            <button class="btn-trocar-escola" onclick="abrirModalTrocarEscola()" title="Trocar de escola">⇄</button>
+        `;
+    }
+
     atualizarStatusHorario();
 }
 
@@ -607,17 +780,6 @@ function atualizarStatusHorario() {
 }
 
 // ──────────────────────────────────────────────────────────
-//  DISCIPLINAS DO PROFESSOR
-//  Retorna as disciplinas que o professor pode usar no horário.
-//  Prioridade: perfil do professor > escola > padrão.
-// ──────────────────────────────────────────────────────────
-function getDisciplinasProfessor() {
-    if (perfilUsuario?.disciplinas?.length) return perfilUsuario.disciplinas;
-    if (escolaAtual?.disciplinas?.length)   return escolaAtual.disciplinas;
-    return DISCIPLINAS_PADRAO;
-}
-
-// ──────────────────────────────────────────────────────────
 //  MODAL DE CONFIGURAÇÃO DO HORÁRIO
 // ──────────────────────────────────────────────────────────
 function abrirConfiguracaoHorario() {
@@ -626,8 +788,8 @@ function abrirConfiguracaoHorario() {
         numAulas: 7, duracaoRecreo: 15, posicaoRecreo: 3
     };
 
-    const disciplinas = getDisciplinasProfessor();
-    const turmas      = escolaAtual?.turmas || TURMAS_PADRAO;
+    const disciplinas = escolaAtual?.disciplinas || DISCIPLINAS_PADRAO;
+    const turmas      = escolaAtual?.turmas      || TURMAS_PADRAO;
 
     const modal = document.createElement('div');
     modal.id = 'modalHorario';
@@ -665,13 +827,6 @@ function abrirConfiguracaoHorario() {
             </div>
         </div>
 
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-            <p style="font-size:13px;color:var(--text-muted);">
-                Usando <strong>${disciplinas.length} disciplina(s)</strong> do seu perfil.
-            </p>
-            <button class="btn-sm" onclick="abrirGerenciarDisciplinas()">✏️ Gerenciar Disciplinas</button>
-        </div>
-
         <div class="grade-horario-wrap">
             <div id="gradeHorario" class="grade-horario"></div>
         </div>
@@ -688,11 +843,11 @@ function abrirConfiguracaoHorario() {
 
 function lerConfigHorario() {
     return {
-        horaInicio:    document.getElementById('cfgHoraInicio')?.value    || '07:15',
-        duracaoAula:   parseInt(document.getElementById('cfgDuracao')?.value      || 45),
-        numAulas:      parseInt(document.getElementById('cfgNumAulas')?.value     || 7),
-        duracaoRecreo: parseInt(document.getElementById('cfgDuracaoRecreo')?.value || 15),
-        posicaoRecreo: parseInt(document.getElementById('cfgPosicaoRecreo')?.value || 3),
+        horaInicio:     document.getElementById('cfgHoraInicio')?.value    || '07:15',
+        duracaoAula:    parseInt(document.getElementById('cfgDuracao')?.value     || 45),
+        numAulas:       parseInt(document.getElementById('cfgNumAulas')?.value    || 7),
+        duracaoRecreo:  parseInt(document.getElementById('cfgDuracaoRecreo')?.value || 15),
+        posicaoRecreo:  parseInt(document.getElementById('cfgPosicaoRecreo')?.value || 3),
     };
 }
 
@@ -704,19 +859,22 @@ function renderGradeHorario() {
 
     const cfg    = lerConfigHorario();
     const { horarios, breaks } = calcularHorarios(cfg);
-    const disciplinas = getDisciplinasProfessor();
-    const turmas      = escolaAtual?.turmas || TURMAS_PADRAO;
-    const ncols       = 6;
+    const disciplinas = escolaAtual?.disciplinas || DISCIPLINAS_PADRAO;
+    const turmas      = escolaAtual?.turmas      || TURMAS_PADRAO;
+    const ncols       = 6; // horario + 5 dias
 
     container.style.gridTemplateColumns = `90px repeat(5, 1fr)`;
 
+    // Cabeçalho
     let html = `<div class="gh-head">Horário</div>`;
     DIAS_SEMANA.forEach(d => { html += `<div class="gh-head">${d}</div>`; });
 
     horarios.forEach((hor, i) => {
         if (breaks[i]) {
+            // linha de recreio
             html += `<div class="gh-break" style="grid-column: span ${ncols};">☕ ${hor}</div>`;
         } else {
+            // linha normal — descobrir índice real de aula (sem recreios)
             const aulaIdx = horarios.slice(0, i+1).filter((_,j) => !breaks[j]).length - 1;
             html += `<div class="gh-time">${hor}</div>`;
             DIAS_SEMANA.forEach(dia => {
@@ -746,7 +904,7 @@ function atualizarDisciplinaHorario(dia, idx, disc) {
     if (!horarioProfessor[dia]) horarioProfessor[dia] = [];
     if (!horarioProfessor[dia][idx]) horarioProfessor[dia][idx] = {};
     horarioProfessor[dia][idx].disciplina = disc;
-    horarioProfessor[dia][idx].turma      = '';
+    horarioProfessor[dia][idx].turma = '';
     renderGradeHorario();
 }
 
@@ -761,6 +919,7 @@ async function salvarHorario() {
     mostrarLoading(true);
     try {
         await salvarHorarioFirestore();
+        // Salvar config de horário na escola se for admin
         if ((perfilUsuario?.tipo === 'admin' || perfilUsuario?.tipo === 'superadmin') && perfilUsuario?.escolaId) {
             await updateDoc(doc(db, 'escolas', perfilUsuario.escolaId), { configHorario: cfg });
             if (escolaAtual) escolaAtual.configHorario = cfg;
@@ -780,8 +939,8 @@ function aplicarHorarioNasSemanas() {
     semanas.forEach((_, i) => {
         const chave = `semana_${i}`;
         if (planejamentos[chave]) {
-            const nova   = criarGradeBaseadaNoHorario();
-            const antiga = planejamentos[chave].aulas;
+            const nova    = criarGradeBaseadaNoHorario();
+            const antiga  = planejamentos[chave].aulas;
             for (let d = 0; d < 5; d++)
                 for (let a = 0; a < nova[d].length; a++)
                     if (antiga[d]?.[a]?.conteudo) nova[d][a].conteudo = antiga[d][a].conteudo;
@@ -793,139 +952,6 @@ function aplicarHorarioNasSemanas() {
 
 function fecharModalHorario() {
     document.getElementById('modalHorario')?.remove();
-}
-
-// ══════════════════════════════════════════════════════════
-//  GERENCIAR DISCIPLINAS DO PROFESSOR
-//  Abre um modal para o professor adicionar/remover
-//  suas próprias disciplinas, salvando no perfil.
-// ══════════════════════════════════════════════════════════
-function abrirGerenciarDisciplinas() {
-    // Clona as disciplinas atuais para edição local
-    let discLocais = JSON.parse(JSON.stringify(getDisciplinasProfessor()));
-
-    const modal = document.createElement('div');
-    modal.id = 'modalDisciplinas';
-    modal.className = 'modal-backdrop';
-    modal.style.zIndex = '1200';
-
-    function renderConteudo() {
-        modal.innerHTML = `
-        <div class="modal-box modal-sm">
-            <div class="modal-header">
-                <h3>📚 Minhas Disciplinas</h3>
-                <button class="modal-close" onclick="document.getElementById('modalDisciplinas').remove()">✕</button>
-            </div>
-
-            <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;line-height:1.6;">
-                Estas são as disciplinas disponíveis no seu horário. Personalize para refletir exatamente as matérias que você leciona.
-            </p>
-
-            <div class="disc-list" id="discList">
-                ${discLocais.map((d, i) => `
-                <div class="disc-item" data-idx="${i}">
-                    <span class="disc-item-icon">${d.icone || '📝'}</span>
-                    <span class="disc-item-name">${d.nome}</span>
-                    <button class="disc-item-del" onclick="removerDiscLocal(${i})" title="Remover">✕</button>
-                </div>`).join('') || '<p style="color:var(--text-muted);font-size:13px;padding:8px 0;">Nenhuma disciplina ainda. Adicione abaixo.</p>'}
-            </div>
-
-            <div class="disc-add-row">
-                <input
-                    type="text"
-                    id="novaDiscNome"
-                    placeholder="Nome da disciplina..."
-                    maxlength="40"
-                    onkeydown="if(event.key==='Enter'){adicionarDiscLocal()}"
-                >
-                <input
-                    type="text"
-                    id="novaDiscIcone"
-                    class="emoji-pick"
-                    placeholder="📝"
-                    maxlength="4"
-                    title="Emoji"
-                >
-                <button class="disc-add-btn" onclick="adicionarDiscLocal()">+ Adicionar</button>
-            </div>
-
-            <p style="font-size:11px;color:var(--text-muted);margin-top:8px;">
-                💡 Dica: use um emoji no campo ao lado para identificar a disciplina visualmente.
-            </p>
-
-            <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border);">
-                <p style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">Ou restaurar as disciplinas:</p>
-                <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                    <button class="btn-sm" onclick="restaurarDiscEscola()">🏫 Da escola</button>
-                    <button class="btn-sm" onclick="restaurarDiscPadrao()">📋 Padrão</button>
-                </div>
-            </div>
-
-            <div class="modal-footer">
-                <button class="btn-cancel" onclick="document.getElementById('modalDisciplinas').remove()">Cancelar</button>
-                <button class="btn-save" onclick="salvarDisciplinasProfessor()">💾 Salvar</button>
-            </div>
-        </div>`;
-    }
-
-    // Funções locais expostas globalmente enquanto modal está aberto
-    window.removerDiscLocal = function(idx) {
-        discLocais.splice(idx, 1);
-        renderConteudo();
-    };
-
-    window.adicionarDiscLocal = function() {
-        const nomeEl  = document.getElementById('novaDiscNome');
-        const iconeEl = document.getElementById('novaDiscIcone');
-        const nome    = nomeEl?.value.trim();
-        const icone   = iconeEl?.value.trim() || '📝';
-        if (!nome) { showToast('Digite o nome da disciplina', 'error'); return; }
-        if (discLocais.some(d => d.nome.toLowerCase() === nome.toLowerCase())) {
-            showToast('Disciplina já existe!', 'error'); return;
-        }
-        discLocais.push({ id: slugify(nome), nome, icone });
-        renderConteudo();
-        // Re-foca o campo
-        setTimeout(() => document.getElementById('novaDiscNome')?.focus(), 50);
-    };
-
-    window.restaurarDiscEscola = function() {
-        if (!escolaAtual?.disciplinas?.length) {
-            showToast('A escola não tem disciplinas configuradas', 'error'); return;
-        }
-        discLocais = JSON.parse(JSON.stringify(escolaAtual.disciplinas));
-        renderConteudo();
-        showToast('Disciplinas da escola restauradas', 'success');
-    };
-
-    window.restaurarDiscPadrao = function() {
-        discLocais = JSON.parse(JSON.stringify(DISCIPLINAS_PADRAO));
-        renderConteudo();
-        showToast('Disciplinas padrão restauradas', 'success');
-    };
-
-    window.salvarDisciplinasProfessor = async function() {
-        if (discLocais.length === 0) {
-            showToast('Adicione pelo menos uma disciplina', 'error'); return;
-        }
-        mostrarLoading(true);
-        try {
-            await updateDoc(doc(db, 'usuarios', usuarioLogado.uid), { disciplinas: discLocais });
-            perfilUsuario.disciplinas = discLocais;
-            showToast('Disciplinas salvas! ✅', 'success');
-            document.getElementById('modalDisciplinas')?.remove();
-            // Re-renderiza grade de horário se o modal de horário ainda estiver aberto
-            renderGradeHorario();
-        } catch(e) {
-            showToast('Erro ao salvar: ' + e.message, 'error');
-        } finally {
-            mostrarLoading(false);
-        }
-    };
-
-    renderConteudo();
-    document.body.appendChild(modal);
-    setTimeout(() => document.getElementById('novaDiscNome')?.focus(), 100);
 }
 
 // ──────────────────────────────────────────────────────────
@@ -948,9 +974,13 @@ async function abrirPainelAdmin() {
     } catch(e) { showToast('Erro ao carregar dados: ' + e.message, 'error'); }
     mostrarLoading(false);
 
-    const isSuperAdmin     = tipo === 'superadmin';
-    const escolasFiltradas = isSuperAdmin ? escolas : escolas.filter(e => e.id === perfilUsuario.escolaId);
-    const usuariosFiltrados = isSuperAdmin ? usuarios : usuarios.filter(u => u.escolaId === perfilUsuario.escolaId);
+    const isSuperAdmin = tipo === 'superadmin';
+    const escolasFiltradas = isSuperAdmin
+        ? escolas
+        : escolas.filter(e => e.id === perfilUsuario.escolaId);
+    const usuariosFiltrados = isSuperAdmin
+        ? usuarios
+        : usuarios.filter(u => u.escolaId === perfilUsuario.escolaId);
 
     const modal = document.createElement('div');
     modal.id = 'modalAdmin';
@@ -978,7 +1008,6 @@ async function abrirPainelAdmin() {
                     <div class="escola-info">
                         <h4>${e.nome}</h4>
                         <small>${e.cidade || ''} ${e.cidade && e.estado ? '·' : ''} ${e.estado || ''}</small>
-                        ${(e.disciplinas || []).length ? `<div class="user-disciplines" style="margin-top:6px;">${(e.disciplinas||[]).slice(0,4).map(d=>`<span class="disc-tag">${d.icone||''} ${d.nome}</span>`).join('')}${(e.disciplinas||[]).length>4?`<span class="disc-tag">+${e.disciplinas.length-4}</span>`:''}</div>` : ''}
                     </div>
                     <div class="escola-palette">
                         <div class="palette-dot" style="background:${e.paleta?.primary || '#0047B6'}"></div>
@@ -991,15 +1020,11 @@ async function abrirPainelAdmin() {
 
         <div>
             <h4 style="font-family:var(--font-display);font-size:18px;color:var(--primary);margin-bottom:14px;">👥 Professores (${usuariosFiltrados.filter(u=>u.tipo==='professor').length})</h4>
-            <div style="max-height:280px;overflow-y:auto;">
+            <div style="max-height:250px;overflow-y:auto;">
             ${usuariosFiltrados.filter(u=>u.tipo!=='superadmin').map(u => `
                 <div class="user-item">
                     <strong>${u.nome}</strong>
                     <small>${u.email} · ${u.tipo} · desde ${u.dataCadastro ? new Date(u.dataCadastro).toLocaleDateString('pt-BR') : '—'}</small>
-                    ${(u.disciplinas||[]).length ? `
-                    <div class="user-disciplines">
-                        ${u.disciplinas.map(d=>`<span class="disc-tag">${d.icone||''} ${d.nome}</span>`).join('')}
-                    </div>` : '<small style="color:var(--text-muted);display:block;margin-top:4px;">Nenhuma disciplina configurada</small>'}
                 </div>
             `).join('') || '<p style="color:var(--text-muted)">Nenhum professor.</p>'}
             </div>
@@ -1019,18 +1044,15 @@ function fecharModalAdmin() {
 
 // ──────────────────────────────────────────────────────────
 //  MODAL — NOVA ESCOLA / EDITAR ESCOLA
-//  Inclui seção de disciplinas da escola
 // ──────────────────────────────────────────────────────────
 let _escolaEditandoId   = null;
 let _logoEditandoBase64 = null;
 let _paletaEditando     = null;
-let _disciplinasEscola  = [];  // disciplinas sendo editadas no modal
 
 async function abrirModalNovaEscola() {
     _escolaEditandoId   = null;
     _logoEditandoBase64 = null;
     _paletaEditando     = PALETAS[0];
-    _disciplinasEscola  = JSON.parse(JSON.stringify(DISCIPLINAS_PADRAO));
     renderModalEscola(null);
 }
 
@@ -1042,7 +1064,6 @@ async function abrirModalEditarEscola(escolaId) {
     _escolaEditandoId   = escolaId;
     _logoEditandoBase64 = snap.data().logoBase64 || null;
     _paletaEditando     = snap.data().paleta || PALETAS[0];
-    _disciplinasEscola  = JSON.parse(JSON.stringify(snap.data().disciplinas || DISCIPLINAS_PADRAO));
     renderModalEscola(snap.data());
 }
 
@@ -1050,15 +1071,14 @@ let _onEscolaSalvaCallback = null;
 
 function renderModalEscolaComCallback(callback) {
     _onEscolaSalvaCallback = callback;
-    _disciplinasEscola     = JSON.parse(JSON.stringify(DISCIPLINAS_PADRAO));
     renderModalEscola(null);
 }
 
 function renderModalEscola(dados) {
     document.getElementById('modalAdmin')?.remove();
 
-    const isNova  = !dados;
-    const modal   = document.createElement('div');
+    const isNova = !dados;
+    const modal  = document.createElement('div');
     modal.id = 'modalEscola';
     modal.className = 'modal-backdrop';
 
@@ -1090,7 +1110,6 @@ function renderModalEscola(dados) {
             </div>
         </div>
 
-        <!-- Logo -->
         <div style="margin-bottom:24px;">
             <div class="horario-field" style="margin-bottom:12px;">
                 <label>Logotipo da escola</label>
@@ -1108,7 +1127,6 @@ function renderModalEscola(dados) {
             ${_logoEditandoBase64 ? `<button class="btn-sm" style="margin-top:8px" onclick="removerLogo()">🗑️ Remover logo</button>` : ''}
         </div>
 
-        <!-- Paleta -->
         <div style="margin-bottom:24px;">
             <div class="horario-field" style="margin-bottom:12px;">
                 <label>Paleta de cores</label>
@@ -1130,6 +1148,7 @@ function renderModalEscola(dados) {
                     <div class="palette-label">Personalizado</div>
                 </div>
             </div>
+
             <div id="customColorPickers" class="${palAtual?.id==='custom'?'':'hidden'}" style="margin-top:14px;">
                 <div class="color-pickers-row">
                     <div class="color-pick-item">
@@ -1148,41 +1167,6 @@ function renderModalEscola(dados) {
             </div>
         </div>
 
-        <!-- ══ DISCIPLINAS DA ESCOLA (NOVO) ══ -->
-        <div class="disciplinas-section">
-            <h4>📚 Disciplinas da Escola</h4>
-            <p class="section-hint">
-                Defina as disciplinas disponíveis para todos os professores desta escola.
-                Cada professor pode personalizar as suas próprias em <em>Meu Horário → Gerenciar Disciplinas</em>.
-            </p>
-
-            <div class="disc-list" id="discListEscola">
-                ${renderDiscListEscola()}
-            </div>
-
-            <div class="disc-add-row">
-                <input
-                    type="text"
-                    id="novaDiscEscolaNome"
-                    placeholder="Nome da disciplina..."
-                    maxlength="40"
-                    onkeydown="if(event.key==='Enter'){adicionarDiscEscola()}"
-                >
-                <input
-                    type="text"
-                    id="novaDiscEscolaIcone"
-                    class="emoji-pick"
-                    placeholder="📝"
-                    maxlength="4"
-                    title="Emoji"
-                >
-                <button class="disc-add-btn" onclick="adicionarDiscEscola()">+ Adicionar</button>
-            </div>
-            <p style="font-size:11px;color:var(--text-muted);margin-top:6px;">
-                💡 Use um emoji para identificar a disciplina visualmente na grade de horários.
-            </p>
-        </div>
-
         <div class="modal-footer">
             <button class="btn-cancel" onclick="fecharModalEscola(); abrirPainelAdmin();">Cancelar</button>
             <button class="btn-save" onclick="salvarEscola()">💾 Salvar Escola</button>
@@ -1193,51 +1177,11 @@ function renderModalEscola(dados) {
     setupDropzone();
 }
 
-// Renderiza a lista de disciplinas dentro do modal de escola
-function renderDiscListEscola() {
-    if (!_disciplinasEscola.length) {
-        return '<p style="color:var(--text-muted);font-size:13px;padding:8px 0;">Nenhuma disciplina ainda.</p>';
-    }
-    return _disciplinasEscola.map((d, i) => `
-    <div class="disc-item" data-idx="${i}">
-        <span class="disc-item-icon">${d.icone || '📝'}</span>
-        <span class="disc-item-name">${d.nome}</span>
-        <button class="disc-item-del" onclick="removerDiscEscola(${i})" title="Remover">✕</button>
-    </div>`).join('');
-}
-
-// Atualiza só o container da lista sem re-renderizar o modal inteiro
-function atualizarDiscListEscola() {
-    const el = document.getElementById('discListEscola');
-    if (el) el.innerHTML = renderDiscListEscola();
-}
-
-window.removerDiscEscola = function(idx) {
-    _disciplinasEscola.splice(idx, 1);
-    atualizarDiscListEscola();
-};
-
-window.adicionarDiscEscola = function() {
-    const nomeEl  = document.getElementById('novaDiscEscolaNome');
-    const iconeEl = document.getElementById('novaDiscEscolaIcone');
-    const nome    = nomeEl?.value.trim();
-    const icone   = iconeEl?.value.trim() || '📝';
-    if (!nome) { showToast('Digite o nome da disciplina', 'error'); return; }
-    if (_disciplinasEscola.some(d => d.nome.toLowerCase() === nome.toLowerCase())) {
-        showToast('Disciplina já existe!', 'error'); return;
-    }
-    _disciplinasEscola.push({ id: slugify(nome), nome, icone });
-    atualizarDiscListEscola();
-    if (nomeEl)  nomeEl.value  = '';
-    if (iconeEl) iconeEl.value = '';
-    nomeEl?.focus();
-};
-
 function setupDropzone() {
     const dz = document.getElementById('dropzoneLogo');
     if (!dz) return;
     dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag-over'); });
-    dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
+    dz.addEventListener('dragleave', ()  => dz.classList.remove('drag-over'));
     dz.addEventListener('drop', e => {
         e.preventDefault();
         dz.classList.remove('drag-over');
@@ -1252,9 +1196,10 @@ window.handleLogoFile = function(file) {
     const reader = new FileReader();
     reader.onload = e => {
         _logoEditandoBase64 = e.target.result;
-        const dz    = document.getElementById('dropzoneLogo');
-        const input = dz?.querySelector('input');
+        const dz = document.getElementById('dropzoneLogo');
         if (dz) {
+            // Substituir conteúdo do dropzone pela preview
+            const input = dz.querySelector('input');
             dz.innerHTML = `<img src="${_logoEditandoBase64}" class="logo-preview" id="logoPreview" alt="Logo">`;
             if (input) dz.appendChild(input);
         }
@@ -1279,7 +1224,7 @@ window.removerLogo = function() {
 window.selecionarPaleta = function(id) {
     document.querySelectorAll('.palette-option').forEach(el => el.classList.remove('selected'));
     const sel = [...document.querySelectorAll('.palette-option')].find(el =>
-        el.getAttribute('onclick')?.includes(`'${id}'`)
+        el.onclick?.toString().includes(`'${id}'`)
     );
     if (sel) sel.classList.add('selected');
 
@@ -1302,25 +1247,22 @@ window.atualizarCustomPaleta = function() {
 };
 
 async function salvarEscola() {
-    const nome      = document.getElementById('escolaNome')?.value.trim();
-    const cidade    = document.getElementById('escolaCidade')?.value.trim();
-    const estado    = document.getElementById('escolaEstado')?.value.trim();
+    const nome   = document.getElementById('escolaNome')?.value.trim();
+    const cidade = document.getElementById('escolaCidade')?.value.trim();
+    const estado = document.getElementById('escolaEstado')?.value.trim();
     const turmasRaw = document.getElementById('escolaTurmas')?.value || '';
-    const turmas    = turmasRaw.split(',').map(t => t.trim()).filter(Boolean);
+    const turmas = turmasRaw.split(',').map(t => t.trim()).filter(Boolean);
 
     if (!nome) { showToast('Informe o nome da escola', 'error'); return; }
-    if (_disciplinasEscola.length === 0) {
-        showToast('Adicione pelo menos uma disciplina à escola', 'error'); return;
-    }
 
     mostrarLoading(true);
     try {
         const dados = {
             nome, cidade, estado, turmas,
-            paleta:      _paletaEditando || PALETAS[0],
-            logoBase64:  _logoEditandoBase64 || null,
-            disciplinas: _disciplinasEscola,
-            updatedAt:   new Date().toISOString()
+            paleta: _paletaEditando || PALETAS[0],
+            logoBase64: _logoEditandoBase64 || null,
+            disciplinas: DISCIPLINAS_PADRAO, // poderá ser editável no futuro
+            updatedAt: new Date().toISOString()
         };
         if (_escolaEditandoId) {
             await updateDoc(doc(db, 'escolas', _escolaEditandoId), dados);
@@ -1351,12 +1293,11 @@ function fecharModalEscola() {
     document.getElementById('modalEscola')?.remove();
 }
 
-// Convidar professor
+// Convidar professor — mostra link/instrução simples
 function abrirModalConvidarProfessor() {
     const modal = document.createElement('div');
     modal.id = 'modalConvite';
     modal.className = 'modal-backdrop';
-    const link = window.location.href;
     modal.innerHTML = `
     <div class="modal-box modal-sm">
         <div class="modal-header">
@@ -1365,13 +1306,13 @@ function abrirModalConvidarProfessor() {
         </div>
         <p style="color:var(--text-muted);margin-bottom:16px;line-height:1.7;">
             Para convidar um professor, compartilhe o link do sistema e peça que ele crie uma conta
-            selecionando <strong>${escolaAtual?.nome || 'sua escola'}</strong> durante o cadastro.
+            selecionando <strong>${escolaAtual?.nome || 'sua escola'}</strong> no campo de escola durante o cadastro.
         </p>
         <div style="background:var(--primary-light);border-radius:8px;padding:14px;font-size:13px;font-weight:600;color:var(--primary);word-break:break-all;">
-            ${link}
+            ${window.location.href}
         </div>
         <div class="modal-footer">
-            <button class="btn-outline" onclick="navigator.clipboard.writeText('${link}').then(()=>showToast('Link copiado!','success'))">📋 Copiar link</button>
+            <button class="btn-outline" onclick="navigator.clipboard.writeText('${window.location.href}');showToast('Link copiado!','success')">📋 Copiar link</button>
             <button class="btn-cancel" onclick="document.getElementById('modalConvite').remove()">Fechar</button>
         </div>
     </div>`;
@@ -1390,11 +1331,11 @@ async function gerarSemanas(dataISO) {
     }
     semanas = [];
     const data = new Date(dataISO + 'T12:00:00');
-    const dow  = data.getDay();
-    // Ajusta para a segunda-feira mais próxima
+    // Ajustar para segunda-feira
+    const dow = data.getDay();
     if (dow !== 1) {
-        const diff = dow === 0 ? 1 : 2 - dow;
-        data.setDate(data.getDate() + diff);
+        const diff = dow === 0 ? 1 : (8 - dow) % 7 || 7;
+        data.setDate(data.getDate() + (dow === 0 ? 1 : 2 - dow));
     }
     for (let i = 0; i < 43; i++) {
         const inicio = new Date(data);
@@ -1441,7 +1382,7 @@ function renderSemanas() {
         const ehAtual = hoje >= semana.inicio && hoje <= semana.fim;
         const div = document.createElement('div');
         div.className = 'semana-card' + (ehAtual ? ' atual' : '');
-        div.onclick   = () => abrirSemana(i);
+        div.onclick = () => abrirSemana(i);
         div.innerHTML = `
             <h3>Semana ${semana.id} ${ehAtual ? '📍' : ''}</h3>
             <p>${semana.inicio.toLocaleDateString('pt-BR')} a ${semana.fim.toLocaleDateString('pt-BR')}</p>`;
@@ -1470,11 +1411,11 @@ function renderGradeSemana(index) {
     const plan   = planejamentos[chave] || { aulas: criarGradeBaseadaNoHorario() };
     const cfg    = escolaAtual?.configHorario || { horaInicio:'07:15', duracaoAula:45, numAulas:7, duracaoRecreo:15, posicaoRecreo:3 };
     const { horarios, breaks } = calcularHorarios(cfg);
-    // Usa disciplinas do professor para exibição
-    const disciplinas = getDisciplinasProfessor();
+    const disciplinas = escolaAtual?.disciplinas || DISCIPLINAS_PADRAO;
 
     let html = `<div class="grade-wrapper"><div class="grade-table" style="grid-template-columns:110px repeat(5,1fr);">`;
 
+    // Cabeçalho
     html += `<div class="grade-head-cell">Horário</div>`;
     DIAS_COMPLETO.forEach((dia, i) => {
         const data = new Date(semana.inicio); data.setDate(data.getDate() + i);
@@ -1491,13 +1432,11 @@ function renderGradeSemana(index) {
             for (let dia = 0; dia < 5; dia++) {
                 const aulaData = plan.aulas[dia]?.[ai] || {};
                 const temAula  = aulaData.disciplina && aulaData.turma;
-                // Busca primeiro nas disciplinas do professor, depois no padrão
-                const disc     = disciplinas.find(d => d.id === aulaData.disciplina)
-                              || DISCIPLINAS_PADRAO.find(d => d.id === aulaData.disciplina);
+                const disc     = disciplinas.find(d => d.id === aulaData.disciplina);
                 if (temAula) {
                     html += `
                     <div class="grade-cell has-aula">
-                        <div class="cell-disc-name">${disc?.icone || ''} ${disc?.nome || aulaData.disciplina}</div>
+                        <div class="cell-disc-name">${disc?.icone || ''} ${disc?.nome || ''}</div>
                         <div class="cell-turma">🏫 Turma ${aulaData.turma}</div>
                         <textarea class="cell-textarea" placeholder="Conteúdo da aula..."
                             oninput="salvarConteudoAula(${index},${dia},${ai},this.value)"
@@ -1558,9 +1497,9 @@ function apagarTodaSemana() {
 //  EXPORTAR DOC
 // ──────────────────────────────────────────────────────────
 function gerarHTMLDoc(titulo, semanasParaExportar) {
-    const primary     = getComputedStyle(document.documentElement).getPropertyValue('--primary').trim() || '#0047B6';
-    const disciplinas = getDisciplinasProfessor();
-    const cfg         = escolaAtual?.configHorario || {};
+    const primary = getComputedStyle(document.documentElement).getPropertyValue('--primary').trim() || '#0047B6';
+    const disciplinas = escolaAtual?.disciplinas || DISCIPLINAS_PADRAO;
+    const cfg = escolaAtual?.configHorario || {};
     const { horarios, breaks } = calcularHorarios(cfg);
     const aulaHorarios = horarios.filter((_,i) => !breaks[i]);
 
@@ -1581,7 +1520,7 @@ function gerarHTMLDoc(titulo, semanasParaExportar) {
 
     semanasParaExportar.forEach(semana => {
         const realIndex = semanas.findIndex(s => s.id === semana.id);
-        const plan      = planejamentos[`semana_${realIndex}`];
+        const plan = planejamentos[`semana_${realIndex}`];
         if (!plan) return;
 
         html += `<h2>Semana ${semana.id} — ${semana.inicio.toLocaleDateString('pt-BR')} a ${semana.fim.toLocaleDateString('pt-BR')}</h2>
@@ -1596,8 +1535,7 @@ function gerarHTMLDoc(titulo, semanasParaExportar) {
             html += `<tr><td class="hcol">${hor}</td>`;
             for (let di = 0; di < 5; di++) {
                 const a    = plan.aulas[di]?.[ai];
-                const disc = disciplinas.find(d => d.id === a?.disciplina)
-                          || DISCIPLINAS_PADRAO.find(d => d.id === a?.disciplina);
+                const disc = disciplinas.find(d => d.id === a?.disciplina);
                 if (disc && a?.turma) {
                     html += `<td><strong>${disc.icone} ${disc.nome}</strong><br>
                         <span style="color:${primary};font-size:10px;">Turma ${a.turma}</span><br>
@@ -1625,35 +1563,206 @@ function baixarDoc(html, filename) {
 
 function exportarSemanaDOC() {
     if (semanaAtual < 0) { showToast('Nenhuma semana selecionada', 'error'); return; }
-    baixarDoc(
-        gerarHTMLDoc(`Semana ${semanas[semanaAtual].id}`, [semanas[semanaAtual]]),
-        `planejamento_semana_${semanas[semanaAtual].id}.doc`
-    );
+    baixarDoc(gerarHTMLDoc(`Semana ${semanas[semanaAtual].id}`, [semanas[semanaAtual]]),
+        `planejamento_semana_${semanas[semanaAtual].id}.doc`);
     showToast('DOC exportado! ✅', 'success');
 }
 
 function exportarParaDOC() {
     if (!semanas.length) { showToast('Gere as semanas primeiro', 'error'); return; }
-    baixarDoc(
-        gerarHTMLDoc('Planejamento Completo', semanas),
-        `planejamento_completo_${new Date().toISOString().split('T')[0]}.doc`
-    );
+    baixarDoc(gerarHTMLDoc('Planejamento Completo', semanas),
+        `planejamento_completo_${new Date().toISOString().split('T')[0]}.doc`);
     showToast('DOC completo exportado! ✅', 'success');
 }
 
 // ──────────────────────────────────────────────────────────
 //  EXPOR GLOBALMENTE
 // ──────────────────────────────────────────────────────────
+
+// ──────────────────────────────────────────────────────────
+//  PERFIL DO PROFESSOR
+// ──────────────────────────────────────────────────────────
+function abrirPerfil() {
+    document.getElementById('paginaInicio').classList.add('hidden');
+    document.getElementById('paginaPerfil').classList.remove('hidden');
+    preencherPerfil();
+}
+
+function fecharPerfil() {
+    document.getElementById('paginaPerfil').classList.add('hidden');
+    document.getElementById('paginaInicio').classList.remove('hidden');
+}
+
+function preencherPerfil() {
+    const nome  = perfilUsuario?.nome  || '';
+    const email = perfilUsuario?.email || usuarioLogado?.email || '';
+    const tipo  = perfilUsuario?.tipo  || 'professor';
+    const escola = escolaAtual?.nome   || '—';
+    const inicial = nome.trim().charAt(0).toUpperCase() || email.charAt(0).toUpperCase() || '?';
+
+    // Sidebar identidade
+    const el = id => document.getElementById(id);
+    if (el('perfilAvatarLetra'))   el('perfilAvatarLetra').textContent   = inicial;
+    if (el('navAvatarInicial'))    el('navAvatarInicial').textContent    = inicial;
+    if (el('perfilNomeDisplay'))   el('perfilNomeDisplay').textContent   = nome || '—';
+    if (el('perfilEmailDisplay'))  el('perfilEmailDisplay').textContent  = email;
+    if (el('perfilEscolaChip'))    el('perfilEscolaChip').textContent    = escola;
+    if (el('perfilTipoBadge'))     el('perfilTipoBadge').textContent     = tipo.charAt(0).toUpperCase() + tipo.slice(1);
+
+    // Formulário dados
+    if (el('perfilNome'))          el('perfilNome').value      = nome;
+    if (el('perfilEmailInfo'))     el('perfilEmailInfo').value = email;
+    if (el('perfilEscola'))        el('perfilEscola').value    = escola;
+
+    // Disciplinas
+    disciplinasPerfil = perfilUsuario?.disciplinasProprias || [];
+    renderDisciplinasTags();
+    renderSidebarDisc();
+}
+
+function renderDisciplinasTags() {
+    const container = document.getElementById('perfilDisciplinasTags');
+    if (!container) return;
+    if (disciplinasPerfil.length === 0) {
+        container.innerHTML = '<span style="color:var(--text-muted);font-size:13px;">Nenhuma disciplina adicionada ainda.</span>';
+        return;
+    }
+    container.innerHTML = disciplinasPerfil.map((d, i) => `
+        <span class="perfil-disc-tag">
+            ${d}
+            <button onclick="removerDisciplina(${i})" aria-label="Remover">×</button>
+        </span>
+    `).join('');
+}
+
+function renderSidebarDisc() {
+    const container = document.getElementById('perfilSidebarDisc');
+    if (!container) return;
+    if (disciplinasPerfil.length === 0) { container.innerHTML = ''; return; }
+    container.innerHTML = `
+        <div class="perfil-sidebar-disc-titulo">Disciplinas</div>
+        ${disciplinasPerfil.map(d => `<span class="perfil-sidebar-disc-tag">${d}</span>`).join('')}
+    `;
+}
+
+window.adicionarDisciplina = function() {
+    const inp = document.getElementById('perfilDisciplinaInput');
+    const val = inp?.value.trim();
+    if (!val) return;
+    if (disciplinasPerfil.includes(val)) { showToast('Disciplina já adicionada', 'error'); return; }
+    if (disciplinasPerfil.length >= 15)  { showToast('Máximo de 15 disciplinas', 'error'); return; }
+    disciplinasPerfil.push(val);
+    inp.value = '';
+    renderDisciplinasTags();
+    renderSidebarDisc();
+};
+
+window.removerDisciplina = function(i) {
+    disciplinasPerfil.splice(i, 1);
+    renderDisciplinasTags();
+    renderSidebarDisc();
+};
+
+async function salvarDadosPerfil() {
+    const nome = document.getElementById('perfilNome')?.value.trim();
+    if (!nome) { showToast('Informe seu nome', 'error'); return; }
+    const btn = document.getElementById('btnSalvarDados');
+    if (btn) btn.disabled = true;
+    try {
+        await updateProfile(usuarioLogado, { displayName: nome });
+        await updateDoc(doc(db, 'usuarios', usuarioLogado.uid), { nome });
+        perfilUsuario.nome = nome;
+        preencherPerfil();
+        atualizarInterface();
+        showToast('Dados salvos! ✅', 'success');
+    } catch(e) {
+        showToast('Erro: ' + e.message, 'error');
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
+async function salvarDisciplinas() {
+    try {
+        await updateDoc(doc(db, 'usuarios', usuarioLogado.uid), { disciplinasProprias: disciplinasPerfil });
+        perfilUsuario.disciplinasProprias = disciplinasPerfil;
+        showToast('Disciplinas salvas! ✅', 'success');
+    } catch(e) {
+        showToast('Erro: ' + e.message, 'error');
+    }
+}
+
+window.toggleSenhaPerfil = function(id, btn) {
+    const inp = document.getElementById(id);
+    if (!inp) return;
+    inp.type = inp.type === 'password' ? 'text' : 'password';
+    btn.style.color = inp.type === 'text' ? 'var(--primary)' : '';
+};
+
+window.avaliarForcaSenhaPerfil = function(v) {
+    const barra = document.getElementById('perfilForcaBarra');
+    const texto = document.getElementById('perfilForcaTexto');
+    if (!barra) return;
+    let score = 0;
+    if (v.length >= 6)  score++;
+    if (v.length >= 10) score++;
+    if (/[A-Z]/.test(v)) score++;
+    if (/[0-9]/.test(v)) score++;
+    if (/[^A-Za-z0-9]/.test(v)) score++;
+    const cores  = ['#ef4444','#f97316','#eab308','#22c55e','#16a34a'];
+    const labels = ['Muito fraca','Fraca','Razoável','Boa','Forte'];
+    barra.style.width      = ((score/5)*100) + '%';
+    barra.style.background = cores[score-1] || '#e5e7eb';
+    if (texto) {
+        texto.textContent = v.length ? (labels[score-1] || '') : '';
+        texto.style.color = cores[score-1] || '';
+    }
+};
+
+async function alterarSenhaPerfil() {
+    const atual    = document.getElementById('perfilSenhaAtual')?.value;
+    const nova     = document.getElementById('perfilNovaSenha')?.value;
+    const confirma = document.getElementById('perfilConfirmarSenha')?.value;
+
+    if (!atual || !nova || !confirma) { showToast('Preencha todos os campos de senha', 'error'); return; }
+    if (nova.length < 6)              { showToast('Nova senha muito curta (mín. 6 caracteres)', 'error'); return; }
+    if (nova !== confirma)            { showToast('As senhas não coincidem', 'error'); return; }
+
+    const btn = document.getElementById('btnAlterarSenha');
+    if (btn) btn.disabled = true;
+    try {
+        const cred = EmailAuthProvider.credential(usuarioLogado.email, atual);
+        await reauthenticateWithCredential(usuarioLogado, cred);
+        await updatePassword(usuarioLogado, nova);
+        document.getElementById('perfilSenhaAtual').value    = '';
+        document.getElementById('perfilNovaSenha').value     = '';
+        document.getElementById('perfilConfirmarSenha').value = '';
+        showToast('Senha alterada com sucesso! 🔒', 'success');
+    } catch(e) {
+        const msgs = {
+            'auth/wrong-password':       'Senha atual incorreta.',
+            'auth/invalid-credential':   'Senha atual incorreta.',
+            'auth/too-many-requests':    'Muitas tentativas. Aguarde.',
+            'auth/weak-password':        'Nova senha muito fraca.',
+        };
+        showToast(msgs[e.code] || 'Erro: ' + e.message, 'error');
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
+
 Object.assign(window, {
     fazerLogin, fazerCadastro, fazerLogout,
     iniciarRecuperacao, mostrarLogin, mostrarCadastro, mostrarRecuperacao,
     abrirConfiguracaoHorario, fecharModalHorario, salvarHorario,
     atualizarDisciplinaHorario, atualizarTurmaHorario, atualizarGradeHorario,
-    abrirGerenciarDisciplinas,
     abrirPainelAdmin, fecharModalAdmin,
     abrirModalNovaEscola, abrirModalEditarEscola, fecharModalEscola, salvarEscola,
     abrirModalConvidarProfessor,
     vincularEscolaExistente, fecharModalSelecionarEscola,
+    abrirModalTrocarEscola, fecharModalTrocarEscola, confirmarTrocaEscola,
+    abrirPerfil, fecharPerfil, salvarDadosPerfil, salvarDisciplinas, alterarSenhaPerfil,
     salvarConteudoAula, copiarConteudo, apagarConteudoAula, apagarTodaSemana,
     exportarSemanaDOC, exportarParaDOC,
     showToast
