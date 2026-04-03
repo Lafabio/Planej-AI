@@ -103,6 +103,7 @@ const PALETAS = [
 
 const DISCIPLINAS_PADRAO = [
     { id: "biologia",             nome: "Biologia",             icone: "🧬" },
+    { id: "ciências",             nome: "ciências",             icone: "☣️" },
     { id: "biohackeria",          nome: "Biohackeria",          icone: "🔬" },
     { id: "projetos_livres",      nome: "Projetos Livres",      icone: "💡" },
     { id: "robotica",             nome: "Robótica",             icone: "🤖" },
