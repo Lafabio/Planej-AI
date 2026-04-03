@@ -160,6 +160,7 @@
         <div class="topbar-actions">
             <button class="tb-btn" onclick="abrirConfiguracaoHorario()">🕐 Meu Horário</button>
             <button class="tb-btn tb-btn-admin hidden" id="btnAdmin" onclick="abrirPainelAdmin()">⚙️ Admin</button>
+            <!-- Botão de perfil com avatar -->
             <button class="tb-btn tb-btn-perfil" id="btnPerfil" onclick="abrirPerfil()" title="Meu Perfil" aria-label="Meu Perfil">
                 <span class="nav-avatar-inicial" id="navAvatarInicial">?</span>
                 <span class="tb-btn-perfil-label">Perfil</span>
@@ -173,6 +174,7 @@
         <!-- ═══ PÁGINA: SEMANAS (padrão) ═══ -->
         <div id="paginaInicio">
 
+            <!-- Controles do topo -->
             <div class="controls-bar">
                 <div class="control-item">
                     <label>Início do ano letivo</label>
@@ -198,11 +200,10 @@
                 <div id="listaSemanas" class="semanas-grid"></div>
                 <div class="hint-box">
                     <p><strong>💡 Como usar:</strong></p>
-                    <p>1. Acesse <em>Perfil</em> e configure as disciplinas que você leciona</p>
-                    <p>2. Clique em <em>Meu Horário</em> para montar sua grade semanal</p>
-                    <p>3. Defina a data de início do ano letivo</p>
-                    <p>4. Clique em uma semana para planejar suas aulas</p>
-                    <p>5. Use <em>Exportar</em> para salvar em Word</p>
+                    <p>1. Clique em <em>Meu Horário</em> para configurar seu horário semanal</p>
+                    <p>2. Defina a data de início do ano letivo</p>
+                    <p>3. Clique em uma semana para planejar suas aulas</p>
+                    <p>4. Use <em>Exportar</em> para salvar em Word</p>
                 </div>
             </div>
 
@@ -227,6 +228,7 @@
         <div id="paginaPerfil" class="hidden">
             <div class="perfil-wrapper">
 
+                <!-- Cabeçalho -->
                 <div class="perfil-page-header">
                     <button class="perfil-voltar" onclick="fecharPerfil()" aria-label="Voltar">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -259,7 +261,11 @@
                             </svg>
                             <span id="perfilEscolaChip">—</span>
                         </div>
-                        <div class="perfil-sidebar-disc" id="perfilSidebarDisc"></div>
+
+                        <!-- Disciplinas rápidas na sidebar -->
+                        <div class="perfil-sidebar-disc" id="perfilSidebarDisc">
+                            <!-- preenchido via JS -->
+                        </div>
                     </aside>
 
                     <!-- Coluna direita: formulários -->
@@ -276,20 +282,24 @@
                                 </div>
                                 <h2 class="perfil-card-titulo">Dados Pessoais</h2>
                             </div>
+
                             <div class="perfil-campo-grupo">
                                 <label class="perfil-label" for="perfilNome">Nome completo</label>
                                 <input class="perfil-input" type="text" id="perfilNome" placeholder="Seu nome completo" autocomplete="name"/>
                             </div>
+
                             <div class="perfil-campo-grupo">
                                 <label class="perfil-label" for="perfilEmailInfo">E-mail</label>
                                 <input class="perfil-input perfil-input-readonly" type="email" id="perfilEmailInfo" readonly tabindex="-1"/>
                                 <span class="perfil-hint">O e-mail não pode ser alterado aqui.</span>
                             </div>
+
                             <div class="perfil-campo-grupo">
                                 <label class="perfil-label" for="perfilEscola">Escola</label>
                                 <input class="perfil-input perfil-input-readonly" type="text" id="perfilEscola" readonly tabindex="-1"/>
-                                <span class="perfil-hint">Mudança de escola deve ser feita pelo botão ⇄ na barra superior.</span>
+                                <span class="perfil-hint">Mudança de escola deve ser solicitada ao administrador.</span>
                             </div>
+
                             <button class="perfil-btn perfil-btn-primario" id="btnSalvarDados" onclick="salvarDadosPerfil()">
                                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                                     <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
@@ -312,52 +322,26 @@
                                 <h2 class="perfil-card-titulo">Disciplinas que Leciono</h2>
                             </div>
 
-                            <!-- Tags das disciplinas já selecionadas -->
                             <div class="perfil-disciplinas-tags" id="perfilDisciplinasTags"></div>
 
-                            <!-- Seletor visual das disciplinas da escola -->
-                            <div class="perfil-disc-seletor-wrap">
-                                <div class="perfil-disc-seletor-titulo">
-                                    <span>Selecione da lista da escola</span>
-                                    <small>Clique para marcar/desmarcar</small>
-                                </div>
-                                <div class="disc-sel-grid" id="seletorDisciplinasGrid">
-                                    <!-- preenchido via JS -->
-                                </div>
+                            <div class="perfil-disciplina-add">
+                                <input
+                                    class="perfil-input"
+                                    type="text"
+                                    id="perfilDisciplinaInput"
+                                    placeholder="Ex: Matemática, História..."
+                                    maxlength="40"
+                                    onkeydown="if(event.key==='Enter'){adicionarDisciplina();}"
+                                />
+                                <button class="perfil-btn perfil-btn-outline-sm" onclick="adicionarDisciplina()">
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                        <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                                    </svg>
+                                    Adicionar
+                                </button>
                             </div>
 
-                            <!-- Adicionar disciplina personalizada -->
-                            <div class="perfil-disc-custom-wrap">
-                                <div class="perfil-disc-seletor-titulo">
-                                    <span>Ou adicione uma personalizada</span>
-                                </div>
-                                <div class="perfil-disciplina-add">
-                                    <input
-                                        type="text"
-                                        id="perfilDiscIcone"
-                                        placeholder="🎯"
-                                        maxlength="4"
-                                        class="perfil-input perfil-input-emoji"
-                                        title="Emoji da disciplina"
-                                    />
-                                    <input
-                                        class="perfil-input"
-                                        type="text"
-                                        id="perfilDisciplinaInput"
-                                        placeholder="Ex: Teatro, Xadrez, Música..."
-                                        maxlength="40"
-                                        onkeydown="if(event.key==='Enter'){adicionarDisciplinaProfessorCustom();}"
-                                    />
-                                    <button class="perfil-btn perfil-btn-outline-sm" onclick="adicionarDisciplinaProfessorCustom()">
-                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                                            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-                                        </svg>
-                                        Adicionar
-                                    </button>
-                                </div>
-                            </div>
-
-                            <button class="perfil-btn perfil-btn-primario" style="margin-top:14px" onclick="salvarDisciplinas()">
+                            <button class="perfil-btn perfil-btn-primario" style="margin-top:10px" onclick="salvarDisciplinas()">
                                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                                     <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
                                     <polyline points="17 21 17 13 7 13 7 21"/>
@@ -378,6 +362,7 @@
                                 </div>
                                 <h2 class="perfil-card-titulo">Segurança</h2>
                             </div>
+
                             <div class="perfil-campo-grupo">
                                 <label class="perfil-label" for="perfilSenhaAtual">Senha atual</label>
                                 <div class="perfil-input-senha-wrap">
@@ -387,6 +372,7 @@
                                     </button>
                                 </div>
                             </div>
+
                             <div class="perfil-campo-grupo">
                                 <label class="perfil-label" for="perfilNovaSenha">Nova senha</label>
                                 <div class="perfil-input-senha-wrap">
@@ -400,6 +386,7 @@
                                 </div>
                                 <span class="perfil-hint" id="perfilForcaTexto"></span>
                             </div>
+
                             <div class="perfil-campo-grupo">
                                 <label class="perfil-label" for="perfilConfirmarSenha">Confirmar nova senha</label>
                                 <div class="perfil-input-senha-wrap">
@@ -409,6 +396,7 @@
                                     </button>
                                 </div>
                             </div>
+
                             <button class="perfil-btn perfil-btn-perigo" id="btnAlterarSenha" onclick="alterarSenhaPerfil()">
                                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                                     <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
@@ -426,6 +414,12 @@
     </main>
 </div><!-- /appPrincipal -->
 
+
+<!-- ═══════════════════════════════════════════════════
+     MODAIS (injetados via JS)
+═══════════════════════════════════════════════════ -->
+
+<!-- Firebase SDK -->
 <script type="module" src="script.js"></script>
 </body>
 </html>
