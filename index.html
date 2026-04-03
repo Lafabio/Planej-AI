@@ -1,425 +1,1615 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EduPlan — Planejador de Aulas</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Fraunces:ital,wght@0,300;0,700;1,300&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css">
-</head>
-<body>
+/* ══════════════════════════════════════════════════════════
+   EDUPLAN — style.css
+   Font: Plus Jakarta Sans + Fraunces
+   Tema: clean institutional com suporte a cores dinâmicas
+══════════════════════════════════════════════════════════ */
 
-<!-- ═══════════════════════════════════════════════════
-     LOADING OVERLAY
-═══════════════════════════════════════════════════ -->
-<div id="loadingOverlay">
-    <div class="loader-ring"></div>
-    <p class="loader-text">Carregando...</p>
-</div>
+/* ── Reset & Base ──────────────────────────────────────── */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
-<!-- ═══════════════════════════════════════════════════
-     TOAST
-═══════════════════════════════════════════════════ -->
-<div id="toastContainer"></div>
+:root {
+    /* Cores padrão — sobrescritas via JS por escola */
+    --primary:      #0047B6;
+    --primary-dark: #003490;
+    --primary-light:#e8f0fe;
+    --accent:       #F2B817;
+    --accent-dark:  #d9a310;
+    --danger:       #dc3545;
+    --success:      #2E7D32;
+    --text:         #1a1a2e;
+    --text-muted:   #64748b;
+    --border:       #e2e8f0;
+    --bg:           #f8fafc;
+    --card:         #ffffff;
+    --radius:       10px;
+    --shadow-sm:    0 1px 3px rgba(0,0,0,.08);
+    --shadow-md:    0 4px 16px rgba(0,0,0,.1);
+    --shadow-lg:    0 8px 32px rgba(0,0,0,.12);
+    --font-body:    'Plus Jakarta Sans', sans-serif;
+    --font-display: 'Fraunces', serif;
+}
 
-<!-- ═══════════════════════════════════════════════════
-     TELA DE LOGIN
-═══════════════════════════════════════════════════ -->
-<div id="telaLogin" class="hidden">
-    <div class="auth-split">
+body {
+    font-family: var(--font-body);
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    font-size: 15px;
+}
 
-        <!-- Lado esquerdo — branding -->
-        <div class="auth-brand" id="authBrand">
-            <div class="auth-brand-inner">
-                <div class="brand-logo-wrap">
-                    <img id="brandLogo" src="" alt="" class="hidden">
-                    <div id="brandIcon" class="brand-icon">📚</div>
-                </div>
-                <h1 class="brand-title">EduPlan</h1>
-                <p class="brand-sub">Planejamento escolar inteligente e colaborativo</p>
-                <ul class="brand-features">
-                    <li>✦ Horários personalizados por escola</li>
-                    <li>✦ Múltiplos professores e turmas</li>
-                    <li>✦ Exportação em Word</li>
-                    <li>✦ Dados sincronizados na nuvem</li>
-                </ul>
-            </div>
-        </div>
+.hidden { display: none !important; }
 
-        <!-- Lado direito — formulários -->
-        <div class="auth-forms">
-            <div class="auth-card">
+a { color: var(--primary); text-decoration: none; }
+a:hover { text-decoration: underline; }
 
-                <!-- LOGIN -->
-                <div id="loginForm">
-                    <div class="form-header">
-                        <h2>Entrar na conta</h2>
-                        <p>Acesse seu painel de planejamento</p>
-                    </div>
-                    <div class="field-group">
-                        <label>Email</label>
-                        <input type="email" id="loginEmail" placeholder="seu@email.com" autocomplete="email">
-                    </div>
-                    <div class="field-group">
-                        <label>Senha</label>
-                        <div class="input-eye">
-                            <input type="password" id="loginSenha" placeholder="••••••••" autocomplete="current-password">
-                            <button type="button" class="eye-btn" onclick="toggleSenha('loginSenha',this)" aria-label="Mostrar senha">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                            </button>
-                        </div>
-                    </div>
-                    <button class="btn-primary" id="btnEntrar" onclick="fazerLogin()">Entrar</button>
-                    <div class="form-links">
-                        <a href="#" onclick="mostrarRecuperacao()">Esqueci minha senha</a>
-                        <span>·</span>
-                        <a href="#" onclick="mostrarCadastro()">Criar conta</a>
-                    </div>
-                </div>
+button { cursor: pointer; font-family: var(--font-body); }
 
-                <!-- CADASTRO -->
-                <div id="cadastroForm" class="hidden">
-                    <div class="form-header">
-                        <h2>Criar conta</h2>
-                        <p>Junte-se à plataforma de planejamento</p>
-                    </div>
-                    <div class="field-group">
-                        <label>Nome completo</label>
-                        <input type="text" id="cadastroNome" placeholder="Prof. João Silva">
-                    </div>
-                    <div class="field-group">
-                        <label>Email</label>
-                        <input type="email" id="cadastroEmail" placeholder="seu@email.com">
-                    </div>
-                    <div class="field-group">
-                        <label>Senha</label>
-                        <div class="input-eye">
-                            <input type="password" id="cadastroSenha" placeholder="Mínimo 6 caracteres">
-                            <button type="button" class="eye-btn" onclick="toggleSenha('cadastroSenha',this)" aria-label="Mostrar senha">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                            </button>
-                        </div>
-                        <div class="senha-strength" id="strengthBar"><div class="strength-fill"></div></div>
-                        <div class="strength-label" id="strengthLabel"></div>
-                    </div>
-                    <div class="field-group">
-                        <label>Confirmar senha</label>
-                        <div class="input-eye">
-                            <input type="password" id="cadastroConfirmarSenha" placeholder="Repita a senha">
-                            <button type="button" class="eye-btn" onclick="toggleSenha('cadastroConfirmarSenha',this)" aria-label="Mostrar senha">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                            </button>
-                        </div>
-                    </div>
-                    <button class="btn-primary" id="btnCadastrar" onclick="fazerCadastro()">Criar Conta</button>
-                    <div class="form-links">
-                        <a href="#" onclick="mostrarLogin()">← Voltar ao login</a>
-                    </div>
-                </div>
+/* ── Loading overlay ──────────────────────────────────── */
+#loadingOverlay {
+    position: fixed; inset: 0;
+    background: rgba(255,255,255,.92);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 18px; z-index: 9999;
+}
 
-                <!-- RECUPERAÇÃO -->
-                <div id="recuperacaoForm" class="hidden">
-                    <div class="form-header">
-                        <h2>Recuperar senha</h2>
-                        <p>Enviaremos um link por email</p>
-                    </div>
-                    <div class="field-group">
-                        <label>Email cadastrado</label>
-                        <input type="email" id="recuperacaoEmail" placeholder="seu@email.com">
-                    </div>
-                    <button class="btn-primary" onclick="iniciarRecuperacao()">Enviar link de recuperação</button>
-                    <div class="form-links">
-                        <a href="#" onclick="mostrarLogin()">← Voltar ao login</a>
-                    </div>
-                </div>
+.loader-ring {
+    width: 52px; height: 52px;
+    border: 4px solid var(--border);
+    border-top-color: var(--primary);
+    border-radius: 50%;
+    animation: spin .75s linear infinite;
+}
 
-            </div><!-- /auth-card -->
-        </div><!-- /auth-forms -->
-    </div><!-- /auth-split -->
-</div><!-- /telaLogin -->
+.loader-text {
+    font-weight: 600;
+    color: var(--primary);
+    font-size: 15px;
+    letter-spacing: .02em;
+}
 
+@keyframes spin { to { transform: rotate(360deg); } }
 
-<!-- ═══════════════════════════════════════════════════
-     APP PRINCIPAL
-═══════════════════════════════════════════════════ -->
-<div id="appPrincipal" class="hidden">
+/* ── Toast ───────────────────────────────────────────── */
+#toastContainer {
+    position: fixed; bottom: 28px; right: 28px;
+    display: flex; flex-direction: column; gap: 10px;
+    z-index: 10000;
+}
 
-    <!-- Top bar -->
-    <header class="topbar" id="appTopbar">
-        <div class="topbar-left">
-            <div class="topbar-logo">
-                <img id="topbarLogo" src="" alt="" class="hidden">
-                <span id="topbarIcon">📚</span>
-            </div>
-            <div>
-                <div class="topbar-appname" id="topbarEscolaNome">EduPlan</div>
-                <div class="topbar-user">Olá, <strong id="userCumprimento">Professor</strong></div>
-            </div>
-        </div>
-        <div class="topbar-actions">
-            <button class="tb-btn" onclick="abrirConfiguracaoHorario()">🕐 Meu Horário</button>
-            <button class="tb-btn tb-btn-admin hidden" id="btnAdmin" onclick="abrirPainelAdmin()">⚙️ Admin</button>
-            <!-- Botão de perfil com avatar -->
-            <button class="tb-btn tb-btn-perfil" id="btnPerfil" onclick="abrirPerfil()" title="Meu Perfil" aria-label="Meu Perfil">
-                <span class="nav-avatar-inicial" id="navAvatarInicial">?</span>
-                <span class="tb-btn-perfil-label">Perfil</span>
-            </button>
-            <button class="tb-btn tb-btn-out" onclick="fazerLogout()">Sair</button>
-        </div>
-    </header>
+.toast {
+    background: #1e293b;
+    color: #fff;
+    padding: 13px 20px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 500;
+    box-shadow: var(--shadow-lg);
+    animation: slideUp .3s cubic-bezier(.34,1.56,.64,1);
+    max-width: 340px;
+    border-left: 4px solid rgba(255,255,255,.3);
+}
 
-    <main class="app-main">
+.toast.success { background: var(--success); }
+.toast.error   { background: var(--danger); }
 
-        <!-- ═══ PÁGINA: SEMANAS (padrão) ═══ -->
-        <div id="paginaInicio">
+@keyframes slideUp {
+    from { opacity: 0; transform: translateY(16px) scale(.96); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+}
 
-            <!-- Controles do topo -->
-            <div class="controls-bar">
-                <div class="control-item">
-                    <label>Início do ano letivo</label>
-                    <div class="date-row">
-                        <input type="date" id="inicioLetivo">
-                        <button class="btn-ghost" id="btnHoje">Hoje</button>
-                    </div>
-                </div>
-                <div class="control-item">
-                    <div id="statusHorario" class="status-badge status-warn">⚠️ Configure seu horário primeiro</div>
-                </div>
-                <div class="control-actions">
-                    <button class="btn-outline" onclick="exportarParaDOC()">📋 Exportar tudo</button>
-                </div>
-            </div>
+/* ══════════════════════════════════════════════════════
+   AUTH — Split Layout
+══════════════════════════════════════════════════════ */
+#telaLogin {
+    min-height: 100vh;
+    display: flex;
+}
 
-            <!-- Semanas -->
-            <div id="paginaSemanas">
-                <div class="section-header">
-                    <h2>Semanas Letivas</h2>
-                    <span class="badge" id="contadorSemanas">0 semanas</span>
-                </div>
-                <div id="listaSemanas" class="semanas-grid"></div>
-                <div class="hint-box">
-                    <p><strong>💡 Como usar:</strong></p>
-                    <p>1. Clique em <em>Meu Horário</em> para configurar seu horário semanal</p>
-                    <p>2. Defina a data de início do ano letivo</p>
-                    <p>3. Clique em uma semana para planejar suas aulas</p>
-                    <p>4. Use <em>Exportar</em> para salvar em Word</p>
-                </div>
-            </div>
+.auth-split {
+    display: flex;
+    width: 100%;
+    min-height: 100vh;
+}
 
-            <!-- Grade de aulas -->
-            <div id="paginaAulas" class="hidden">
-                <div class="page-aulas-header">
-                    <button id="voltar" class="btn-back">← Voltar</button>
-                    <div>
-                        <h2 id="tituloSemana"></h2>
-                        <div class="aulas-actions">
-                            <button class="btn-outline" onclick="exportarSemanaDOC()">📄 Exportar semana</button>
-                            <button class="btn-danger" onclick="apagarTodaSemana()">🗑️ Limpar semana</button>
-                        </div>
-                    </div>
-                </div>
-                <div id="gradeSemana"></div>
-            </div>
+/* Lado esquerdo — branding */
+.auth-brand {
+    flex: 0 0 420px;
+    background: var(--primary);
+    background-image: radial-gradient(circle at 20% 80%, rgba(255,255,255,.07) 0%, transparent 50%),
+                      radial-gradient(circle at 80% 20%, rgba(255,255,255,.05) 0%, transparent 40%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 50px 44px;
+    position: relative;
+    overflow: hidden;
+}
 
-        </div><!-- /paginaInicio -->
+.auth-brand::before {
+    content: '';
+    position: absolute;
+    bottom: -80px; right: -80px;
+    width: 300px; height: 300px;
+    border-radius: 50%;
+    background: rgba(255,255,255,.05);
+}
 
-        <!-- ═══ PÁGINA: PERFIL ═══ -->
-        <div id="paginaPerfil" class="hidden">
-            <div class="perfil-wrapper">
+.auth-brand-inner { position: relative; z-index: 1; color: white; }
 
-                <!-- Cabeçalho -->
-                <div class="perfil-page-header">
-                    <button class="perfil-voltar" onclick="fecharPerfil()" aria-label="Voltar">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                            <polyline points="15 18 9 12 15 6"/>
-                        </svg>
-                        Voltar
-                    </button>
-                    <div class="perfil-page-titulo-wrap">
-                        <h1 class="perfil-page-titulo">Meu Perfil</h1>
-                        <p class="perfil-page-sub">Gerencie suas informações pessoais e segurança</p>
-                    </div>
-                </div>
+.brand-logo-wrap {
+    margin-bottom: 24px;
+}
 
-                <div class="perfil-grid">
+.brand-icon {
+    font-size: 52px;
+    line-height: 1;
+    display: block;
+}
 
-                    <!-- Coluna esquerda: identidade -->
-                    <aside class="perfil-card perfil-identidade">
-                        <div class="perfil-avatar-wrap">
-                            <div class="perfil-avatar" id="perfilAvatarCirculo">
-                                <span id="perfilAvatarLetra">?</span>
-                            </div>
-                            <div class="perfil-avatar-badge" id="perfilTipoBadge">Professor</div>
-                        </div>
-                        <p class="perfil-nome-display" id="perfilNomeDisplay">—</p>
-                        <p class="perfil-email-display" id="perfilEmailDisplay">—</p>
-                        <div class="perfil-escola-chip">
-                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
-                                <polyline points="9 22 9 12 15 12 15 22"/>
-                            </svg>
-                            <span id="perfilEscolaChip">—</span>
-                        </div>
+.brand-logo-wrap img {
+    max-width: 120px;
+    max-height: 80px;
+    object-fit: contain;
+    border-radius: 8px;
+}
 
-                        <!-- Disciplinas rápidas na sidebar -->
-                        <div class="perfil-sidebar-disc" id="perfilSidebarDisc">
-                            <!-- preenchido via JS -->
-                        </div>
-                    </aside>
+.brand-title {
+    font-family: var(--font-display);
+    font-size: 42px;
+    font-weight: 700;
+    letter-spacing: -.02em;
+    line-height: 1.1;
+    margin-bottom: 12px;
+    color: white;
+}
 
-                    <!-- Coluna direita: formulários -->
-                    <div class="perfil-formularios">
+.brand-sub {
+    font-size: 16px;
+    opacity: .8;
+    margin-bottom: 36px;
+    font-weight: 400;
+    line-height: 1.5;
+}
 
-                        <!-- Card 1: Dados pessoais -->
-                        <div class="perfil-card">
-                            <div class="perfil-card-header">
-                                <div class="perfil-card-icone perfil-icone-dados">
-                                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                                        <circle cx="12" cy="7" r="4"/>
-                                    </svg>
-                                </div>
-                                <h2 class="perfil-card-titulo">Dados Pessoais</h2>
-                            </div>
+.brand-features {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
 
-                            <div class="perfil-campo-grupo">
-                                <label class="perfil-label" for="perfilNome">Nome completo</label>
-                                <input class="perfil-input" type="text" id="perfilNome" placeholder="Seu nome completo" autocomplete="name"/>
-                            </div>
+.brand-features li {
+    font-size: 14px;
+    opacity: .75;
+    font-weight: 500;
+    letter-spacing: .01em;
+}
 
-                            <div class="perfil-campo-grupo">
-                                <label class="perfil-label" for="perfilEmailInfo">E-mail</label>
-                                <input class="perfil-input perfil-input-readonly" type="email" id="perfilEmailInfo" readonly tabindex="-1"/>
-                                <span class="perfil-hint">O e-mail não pode ser alterado aqui.</span>
-                            </div>
+/* Lado direito — formulário */
+.auth-forms {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 30px;
+    background: var(--bg);
+}
 
-                            <div class="perfil-campo-grupo">
-                                <label class="perfil-label" for="perfilEscola">Escola</label>
-                                <input class="perfil-input perfil-input-readonly" type="text" id="perfilEscola" readonly tabindex="-1"/>
-                                <span class="perfil-hint">Mudança de escola deve ser solicitada ao administrador.</span>
-                            </div>
+.auth-card {
+    width: 100%;
+    max-width: 420px;
+    background: var(--card);
+    border-radius: 18px;
+    padding: 44px;
+    box-shadow: var(--shadow-lg);
+    border: 1px solid var(--border);
+}
 
-                            <button class="perfil-btn perfil-btn-primario" id="btnSalvarDados" onclick="salvarDadosPerfil()">
-                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
-                                    <polyline points="17 21 17 13 7 13 7 21"/>
-                                    <polyline points="7 3 7 8 15 8"/>
-                                </svg>
-                                Salvar dados
-                            </button>
-                        </div>
+.form-header {
+    margin-bottom: 30px;
+}
 
-                        <!-- Card 2: Disciplinas -->
-                        <div class="perfil-card">
-                            <div class="perfil-card-header">
-                                <div class="perfil-card-icone perfil-icone-disciplinas">
-                                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                        <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
-                                        <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
-                                    </svg>
-                                </div>
-                                <h2 class="perfil-card-titulo">Disciplinas que Leciono</h2>
-                            </div>
+.form-header h2 {
+    font-family: var(--font-display);
+    font-size: 26px;
+    font-weight: 700;
+    color: var(--primary);
+    margin-bottom: 6px;
+}
 
-                            <div class="perfil-disciplinas-tags" id="perfilDisciplinasTags"></div>
+.form-header p {
+    font-size: 14px;
+    color: var(--text-muted);
+}
 
-                            <div class="perfil-disciplina-add">
-                                <input
-                                    class="perfil-input"
-                                    type="text"
-                                    id="perfilDisciplinaInput"
-                                    placeholder="Ex: Matemática, História..."
-                                    maxlength="40"
-                                    onkeydown="if(event.key==='Enter'){adicionarDisciplina();}"
-                                />
-                                <button class="perfil-btn perfil-btn-outline-sm" onclick="adicionarDisciplina()">
-                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                                        <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-                                    </svg>
-                                    Adicionar
-                                </button>
-                            </div>
+/* ── Field group ─────────────────────────────────────── */
+.field-group {
+    margin-bottom: 18px;
+}
 
-                            <button class="perfil-btn perfil-btn-primario" style="margin-top:10px" onclick="salvarDisciplinas()">
-                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
-                                    <polyline points="17 21 17 13 7 13 7 21"/>
-                                    <polyline points="7 3 7 8 15 8"/>
-                                </svg>
-                                Salvar disciplinas
-                            </button>
-                        </div>
+.field-group label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    margin-bottom: 7px;
+}
 
-                        <!-- Card 3: Segurança -->
-                        <div class="perfil-card">
-                            <div class="perfil-card-header">
-                                <div class="perfil-card-icone perfil-icone-seguranca">
-                                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                                        <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-                                    </svg>
-                                </div>
-                                <h2 class="perfil-card-titulo">Segurança</h2>
-                            </div>
+.field-group input,
+.field-group select {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius);
+    font-size: 15px;
+    font-family: var(--font-body);
+    color: var(--text);
+    background: var(--card);
+    transition: border-color .2s, box-shadow .2s;
+    outline: none;
+}
 
-                            <div class="perfil-campo-grupo">
-                                <label class="perfil-label" for="perfilSenhaAtual">Senha atual</label>
-                                <div class="perfil-input-senha-wrap">
-                                    <input class="perfil-input" type="password" id="perfilSenhaAtual" placeholder="••••••••" autocomplete="current-password"/>
-                                    <button class="perfil-olho" type="button" onclick="toggleSenhaPerfil('perfilSenhaAtual', this)" aria-label="Mostrar/ocultar">
-                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                                    </button>
-                                </div>
-                            </div>
+.field-group input:focus,
+.field-group select:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(0,71,182,.1);
+}
 
-                            <div class="perfil-campo-grupo">
-                                <label class="perfil-label" for="perfilNovaSenha">Nova senha</label>
-                                <div class="perfil-input-senha-wrap">
-                                    <input class="perfil-input" type="password" id="perfilNovaSenha" placeholder="Mínimo 6 caracteres" autocomplete="new-password" oninput="avaliarForcaSenhaPerfil(this.value)"/>
-                                    <button class="perfil-olho" type="button" onclick="toggleSenhaPerfil('perfilNovaSenha', this)" aria-label="Mostrar/ocultar">
-                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                                    </button>
-                                </div>
-                                <div class="perfil-forca-senha">
-                                    <div class="perfil-forca-barra" id="perfilForcaBarra"></div>
-                                </div>
-                                <span class="perfil-hint" id="perfilForcaTexto"></span>
-                            </div>
+.field-group select {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    background-size: 16px;
+    padding-right: 36px;
+}
 
-                            <div class="perfil-campo-grupo">
-                                <label class="perfil-label" for="perfilConfirmarSenha">Confirmar nova senha</label>
-                                <div class="perfil-input-senha-wrap">
-                                    <input class="perfil-input" type="password" id="perfilConfirmarSenha" placeholder="Repita a nova senha" autocomplete="new-password"/>
-                                    <button class="perfil-olho" type="button" onclick="toggleSenhaPerfil('perfilConfirmarSenha', this)" aria-label="Mostrar/ocultar">
-                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                                    </button>
-                                </div>
-                            </div>
+/* Input com botão olho */
+.input-eye {
+    position: relative;
+}
 
-                            <button class="perfil-btn perfil-btn-perigo" id="btnAlterarSenha" onclick="alterarSenhaPerfil()">
-                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                                    <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-                                </svg>
-                                Alterar senha
-                            </button>
-                        </div>
+.input-eye input {
+    padding-right: 44px;
+}
 
-                    </div><!-- /perfil-formularios -->
-                </div><!-- /perfil-grid -->
-            </div><!-- /perfil-wrapper -->
-        </div><!-- /paginaPerfil -->
+.eye-btn {
+    position: absolute;
+    right: 12px; top: 50%;
+    transform: translateY(-50%);
+    background: none; border: none;
+    padding: 4px;
+    color: var(--text-muted);
+    display: flex; align-items: center;
+    transition: color .2s;
+}
 
-    </main>
-</div><!-- /appPrincipal -->
+.eye-btn:hover { color: var(--primary); }
+.eye-btn svg { width: 18px; height: 18px; }
 
+/* Barra de força de senha */
+.senha-strength {
+    height: 4px;
+    background: var(--border);
+    border-radius: 99px;
+    margin-top: 8px;
+    overflow: hidden;
+}
 
-<!-- ═══════════════════════════════════════════════════
-     MODAIS (injetados via JS)
-═══════════════════════════════════════════════════ -->
+.strength-fill {
+    height: 100%;
+    border-radius: 99px;
+    width: 0%;
+    transition: width .3s, background .3s;
+}
 
-<!-- Firebase SDK -->
-<script type="module" src="script.js"></script>
-</body>
-</html>
+.strength-label {
+    font-size: 11px;
+    margin-top: 4px;
+    font-weight: 600;
+    color: var(--text-muted);
+}
+
+/* ── Botões auth ─────────────────────────────────────── */
+.btn-primary {
+    display: block;
+    width: 100%;
+    padding: 14px;
+    background: var(--primary);
+    color: white;
+    border: none;
+    border-radius: var(--radius);
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: .02em;
+    transition: background .2s, transform .15s, opacity .2s;
+    margin-top: 6px;
+}
+
+.btn-primary:hover:not(:disabled) {
+    background: var(--primary-dark);
+    transform: translateY(-1px);
+}
+
+.btn-primary:disabled {
+    background: #b0bec5;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.form-links {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 20px;
+    font-size: 13px;
+    color: var(--text-muted);
+}
+
+/* ══════════════════════════════════════════════════════
+   APP — Topbar
+══════════════════════════════════════════════════════ */
+.topbar {
+    background: var(--primary);
+    color: white;
+    padding: 0 28px;
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky; top: 0; z-index: 100;
+    box-shadow: 0 2px 8px rgba(0,0,0,.15);
+    gap: 16px;
+}
+
+.topbar-left {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.topbar-logo {
+    font-size: 28px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+}
+
+.topbar-logo img {
+    max-height: 38px;
+    max-width: 90px;
+    object-fit: contain;
+    border-radius: 6px;
+    background: white;
+    padding: 3px 5px;
+}
+
+.topbar-appname {
+    font-family: var(--font-display);
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: -.01em;
+    color: white;
+}
+
+.topbar-user {
+    font-size: 12px;
+    opacity: .7;
+    color: white;
+}
+
+.topbar-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.tb-btn {
+    background: rgba(255,255,255,.15);
+    border: 1.5px solid rgba(255,255,255,.25);
+    color: white;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    transition: background .2s;
+}
+
+.tb-btn:hover { background: rgba(255,255,255,.25); }
+
+.tb-btn-admin {
+    background: rgba(46,125,50,.5);
+    border-color: rgba(46,125,50,.6);
+}
+
+.tb-btn-out {
+    background: rgba(220,53,69,.25);
+    border-color: rgba(220,53,69,.4);
+}
+
+/* ── App main ──────────────────────────────────────── */
+.app-main {
+    max-width: 1440px;
+    margin: 0 auto;
+    padding: 28px 28px 60px;
+}
+
+/* ── Controls bar ──────────────────────────────────── */
+.controls-bar {
+    display: flex;
+    align-items: flex-end;
+    gap: 24px;
+    flex-wrap: wrap;
+    background: var(--card);
+    border-radius: 14px;
+    padding: 22px 24px;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-sm);
+    margin-bottom: 28px;
+}
+
+.control-item { display: flex; flex-direction: column; gap: 6px; }
+
+.control-item label {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--text-muted);
+}
+
+.date-row { display: flex; gap: 8px; align-items: center; }
+
+.controls-bar input[type="date"] {
+    padding: 9px 13px;
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    font-size: 14px;
+    font-family: var(--font-body);
+    outline: none;
+    color: var(--text);
+    transition: border-color .2s;
+}
+
+.controls-bar input[type="date"]:focus {
+    border-color: var(--primary);
+}
+
+.control-actions { margin-left: auto; display: flex; gap: 8px; }
+
+.btn-ghost {
+    padding: 9px 14px;
+    background: var(--primary-light);
+    color: var(--primary);
+    border: 1.5px solid var(--primary-light);
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    transition: all .2s;
+}
+
+.btn-ghost:hover {
+    background: var(--primary);
+    color: white;
+}
+
+.btn-outline {
+    padding: 9px 18px;
+    background: transparent;
+    color: var(--primary);
+    border: 1.5px solid var(--primary);
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    transition: all .2s;
+}
+
+.btn-outline:hover {
+    background: var(--primary);
+    color: white;
+}
+
+.btn-danger {
+    padding: 9px 18px;
+    background: transparent;
+    color: var(--danger);
+    border: 1.5px solid var(--danger);
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    transition: all .2s;
+}
+
+.btn-danger:hover {
+    background: var(--danger);
+    color: white;
+}
+
+/* Status badge */
+.status-badge {
+    display: inline-block;
+    padding: 7px 14px;
+    border-radius: 99px;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.status-warn { background: #fff8e1; color: #b45309; border: 1px solid #fde68a; }
+.status-ok   { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
+
+/* ── Semanas ──────────────────────────────────────── */
+.section-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 22px;
+}
+
+.section-header h2 {
+    font-family: var(--font-display);
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--text);
+}
+
+.badge {
+    background: var(--primary-light);
+    color: var(--primary);
+    padding: 4px 12px;
+    border-radius: 99px;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.semanas-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    gap: 14px;
+    margin-bottom: 32px;
+}
+
+.semana-card {
+    background: var(--card);
+    border-radius: 12px;
+    padding: 18px;
+    border: 1.5px solid var(--border);
+    cursor: pointer;
+    transition: transform .2s, box-shadow .2s, border-color .2s;
+    border-left: 4px solid var(--primary);
+}
+
+.semana-card:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-md);
+    border-color: var(--primary);
+}
+
+.semana-card.atual {
+    border-left-color: var(--accent);
+    box-shadow: 0 4px 16px rgba(242,184,23,.25);
+}
+
+.semana-card h3 {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--primary);
+    margin-bottom: 4px;
+}
+
+.semana-card p {
+    font-size: 13px;
+    color: var(--text-muted);
+}
+
+/* Hint box */
+.hint-box {
+    background: #fffbeb;
+    border-left: 4px solid var(--accent);
+    border-radius: 10px;
+    padding: 20px 24px;
+    font-size: 14px;
+    line-height: 1.8;
+    color: #78350f;
+}
+
+/* ── Página de aulas ──────────────────────────────── */
+.page-aulas-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 20px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+}
+
+.btn-back {
+    background: none;
+    border: 1.5px solid var(--border);
+    color: var(--primary);
+    padding: 9px 16px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    transition: all .2s;
+}
+
+.btn-back:hover {
+    background: var(--primary);
+    color: white;
+    border-color: var(--primary);
+}
+
+.page-aulas-header h2 {
+    font-family: var(--font-display);
+    font-size: 22px;
+    font-weight: 700;
+    margin-bottom: 10px;
+}
+
+.aulas-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+/* Grade de semana */
+.grade-wrapper {
+    overflow-x: auto;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-sm);
+}
+
+.grade-table {
+    display: grid;
+    min-width: 760px;
+    border-collapse: collapse;
+}
+
+.grade-head-cell {
+    background: var(--primary);
+    color: white;
+    padding: 12px 10px;
+    text-align: center;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.grade-time-cell {
+    background: var(--primary-light);
+    color: var(--primary);
+    padding: 10px;
+    text-align: center;
+    font-size: 12px;
+    font-weight: 700;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border-bottom: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+}
+
+.grade-break-cell {
+    background: #fff8e1;
+    color: #b45309;
+    padding: 6px 10px;
+    text-align: center;
+    font-size: 11px;
+    font-weight: 700;
+    border-bottom: 1px solid var(--border);
+}
+
+.grade-cell {
+    padding: 10px;
+    border-bottom: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+    background: white;
+    min-height: 110px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.grade-cell.has-aula {
+    background: white;
+}
+
+.grade-cell.no-aula {
+    background: #fafafa;
+    align-items: center;
+    justify-content: center;
+}
+
+.grade-cell.no-aula span {
+    color: #cbd5e1;
+    font-size: 18px;
+}
+
+.cell-disc-name {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--primary);
+}
+
+.cell-turma {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
+.cell-textarea {
+    flex: 1;
+    width: 100%;
+    padding: 5px 8px;
+    border: 1.5px solid var(--border);
+    border-radius: 6px;
+    font-size: 12px;
+    font-family: var(--font-body);
+    resize: vertical;
+    min-height: 56px;
+    outline: none;
+    transition: border-color .2s;
+    color: var(--text);
+    line-height: 1.5;
+}
+
+.cell-textarea:focus {
+    border-color: var(--primary);
+}
+
+.cell-btns {
+    display: flex;
+    gap: 5px;
+}
+
+.cell-btn {
+    flex: 1;
+    padding: 3px 7px;
+    border: none;
+    border-radius: 5px;
+    font-size: 11px;
+    font-weight: 600;
+    transition: all .15s;
+}
+
+.cell-btn-copy { background: #fef9c3; color: #854d0e; }
+.cell-btn-copy:hover { background: var(--accent); color: white; }
+
+.cell-btn-del { background: #fee2e2; color: #991b1b; }
+.cell-btn-del:hover { background: var(--danger); color: white; }
+
+/* ══════════════════════════════════════════════════════
+   MODAIS
+══════════════════════════════════════════════════════ */
+.modal-backdrop {
+    position: fixed; inset: 0;
+    background: rgba(15,23,42,.55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 20px;
+    animation: fadeIn .2s;
+}
+
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+.modal-box {
+    background: var(--card);
+    border-radius: 18px;
+    padding: 32px;
+    width: 100%;
+    max-width: 960px;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 24px 64px rgba(0,0,0,.2);
+    animation: slideIn .25s cubic-bezier(.34,1.56,.64,1);
+}
+
+@keyframes slideIn {
+    from { opacity: 0; transform: scale(.96) translateY(10px); }
+    to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.modal-box.modal-sm { max-width: 520px; }
+
+.modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+}
+
+.modal-header h3 {
+    font-family: var(--font-display);
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--primary);
+}
+
+.modal-close {
+    width: 36px; height: 36px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    font-size: 18px;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text-muted);
+    transition: all .2s;
+}
+
+.modal-close:hover {
+    background: var(--danger);
+    color: white;
+    border-color: var(--danger);
+}
+
+.modal-footer {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    margin-top: 28px;
+    padding-top: 18px;
+    border-top: 1px solid var(--border);
+}
+
+/* Botões modal */
+.btn-save {
+    padding: 11px 24px;
+    background: var(--success);
+    color: white;
+    border: none;
+    border-radius: 9px;
+    font-size: 14px;
+    font-weight: 700;
+    transition: all .2s;
+}
+.btn-save:hover { background: #1b5e20; transform: translateY(-1px); }
+
+.btn-cancel {
+    padding: 11px 24px;
+    background: var(--bg);
+    color: var(--text-muted);
+    border: 1.5px solid var(--border);
+    border-radius: 9px;
+    font-size: 14px;
+    font-weight: 600;
+    transition: all .2s;
+}
+.btn-cancel:hover { background: var(--border); color: var(--text); }
+
+/* ── Configuração de horário ─────────────────────── */
+.horario-config-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.horario-field label {
+    display: block;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+}
+
+.horario-field input,
+.horario-field select {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    font-size: 14px;
+    font-family: var(--font-body);
+    outline: none;
+    color: var(--text);
+    transition: border-color .2s;
+}
+
+.horario-field input:focus,
+.horario-field select:focus {
+    border-color: var(--primary);
+}
+
+/* Grade do horário */
+.grade-horario-wrap {
+    overflow-x: auto;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+}
+
+.grade-horario {
+    display: grid;
+    min-width: 600px;
+}
+
+.gh-head {
+    background: var(--primary);
+    color: white;
+    padding: 10px;
+    text-align: center;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.gh-time {
+    background: var(--primary-light);
+    color: var(--primary);
+    padding: 8px;
+    text-align: center;
+    font-size: 11px;
+    font-weight: 700;
+    border-right: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.gh-break {
+    background: #fff8e1;
+    color: #92400e;
+    text-align: center;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 5px;
+    border-bottom: 1px solid var(--border);
+}
+
+.gh-cell {
+    padding: 6px;
+    border-right: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    background: white;
+}
+
+.gh-cell select {
+    width: 100%;
+    padding: 4px 6px;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    font-size: 11px;
+    font-family: var(--font-body);
+    margin-bottom: 4px;
+    outline: none;
+    color: var(--text);
+}
+
+.gh-cell select:focus {
+    border-color: var(--primary);
+}
+
+/* ── Admin painel ────────────────────────────────── */
+.admin-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    margin-bottom: 24px;
+}
+
+.admin-section {
+    background: var(--bg);
+    border-radius: 12px;
+    padding: 20px;
+    border: 1px solid var(--border);
+}
+
+.admin-section h4 {
+    font-family: var(--font-display);
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--primary);
+    margin-bottom: 14px;
+}
+
+.user-item {
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.user-item:last-child { border-bottom: none; }
+
+.user-item strong { font-size: 14px; }
+.user-item small { display: block; font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+
+/* ── Escolas ──────────────────────────────────────── */
+.escola-card {
+    background: var(--card);
+    border-radius: 12px;
+    padding: 18px;
+    border: 1.5px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 10px;
+    transition: all .2s;
+}
+
+.escola-card:hover {
+    box-shadow: var(--shadow-md);
+    border-color: var(--primary);
+}
+
+.escola-logo-thumb {
+    width: 48px; height: 48px;
+    border-radius: 8px;
+    object-fit: contain;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    padding: 4px;
+}
+
+.escola-logo-emoji {
+    font-size: 36px;
+    width: 48px;
+    text-align: center;
+}
+
+.escola-info { flex: 1; }
+.escola-info h4 { font-size: 15px; font-weight: 700; color: var(--text); }
+.escola-info small { font-size: 12px; color: var(--text-muted); }
+
+.escola-palette {
+    display: flex;
+    gap: 5px;
+    align-items: center;
+}
+
+.palette-dot {
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    border: 2px solid rgba(0,0,0,.1);
+}
+
+.btn-sm {
+    padding: 6px 14px;
+    font-size: 12px;
+    font-weight: 600;
+    border-radius: 7px;
+    border: 1.5px solid var(--border);
+    background: white;
+    color: var(--text);
+    transition: all .2s;
+}
+
+.btn-sm:hover { background: var(--primary); color: white; border-color: var(--primary); }
+
+/* ── Dropzone logo ────────────────────────────────── */
+.dropzone {
+    border: 2px dashed var(--border);
+    border-radius: 10px;
+    padding: 28px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color .2s, background .2s;
+    background: var(--bg);
+    position: relative;
+}
+
+.dropzone:hover,
+.dropzone.drag-over {
+    border-color: var(--primary);
+    background: var(--primary-light);
+}
+
+.dropzone input[type="file"] {
+    position: absolute; inset: 0;
+    opacity: 0; cursor: pointer;
+    width: 100%; height: 100%;
+}
+
+.dropzone-icon { font-size: 32px; margin-bottom: 8px; }
+.dropzone-text { font-size: 13px; color: var(--text-muted); font-weight: 500; }
+.dropzone-sub  { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+
+.logo-preview {
+    max-width: 150px;
+    max-height: 80px;
+    object-fit: contain;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: white;
+    padding: 6px;
+}
+
+/* Paleta de cores */
+.palette-picker {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    gap: 10px;
+    margin: 14px 0;
+}
+
+.palette-option {
+    border-radius: 10px;
+    padding: 10px;
+    cursor: pointer;
+    border: 2.5px solid transparent;
+    transition: all .2s;
+    text-align: center;
+}
+
+.palette-option.selected {
+    border-color: #1e293b;
+    box-shadow: 0 0 0 2px rgba(0,0,0,.2);
+}
+
+.palette-swatches {
+    display: flex;
+    justify-content: center;
+    gap: 4px;
+    margin-bottom: 5px;
+}
+
+.palette-swatch {
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    border: 1.5px solid rgba(0,0,0,.1);
+}
+
+.palette-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text);
+}
+
+/* Cores customizadas */
+.color-pickers-row {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-top: 10px;
+}
+
+.color-pick-item { display: flex; flex-direction: column; gap: 5px; align-items: center; }
+.color-pick-item label { font-size: 11px; font-weight: 600; color: var(--text-muted); text-align: center; }
+.color-pick-item input[type="color"] {
+    width: 44px; height: 36px;
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    cursor: pointer;
+    padding: 2px;
+}
+
+/* ── Responsivo ──────────────────────────────────── */
+@media (max-width: 900px) {
+    .auth-brand { display: none; }
+
+    .auth-card { padding: 32px 24px; }
+
+    .admin-grid { grid-template-columns: 1fr; }
+
+    .horario-config-grid { grid-template-columns: 1fr 1fr; }
+}
+
+@media (max-width: 640px) {
+    .topbar { padding: 0 16px; }
+    .app-main { padding: 16px 14px 40px; }
+    .controls-bar { padding: 16px; flex-direction: column; align-items: flex-start; }
+    .control-actions { margin-left: 0; }
+    .horario-config-grid { grid-template-columns: 1fr; }
+    .modal-box { padding: 20px 16px; }
+}
+
+/* ── Trocar de Escola ─────────────────────────────── */
+.btn-trocar-escola {
+    background: transparent;
+    border: 1.5px solid rgba(255,255,255,0.4);
+    color: white;
+    border-radius: 6px;
+    padding: 2px 8px;
+    font-size: 14px;
+    cursor: pointer;
+    margin-left: 8px;
+    transition: all .2s;
+    vertical-align: middle;
+}
+.btn-trocar-escola:hover {
+    background: rgba(255,255,255,0.2);
+    border-color: white;
+}
+
+.escolas-lista-troca {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-height: 340px;
+    overflow-y: auto;
+    margin-bottom: 8px;
+}
+
+.escola-troca-card {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 16px;
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: all .2s;
+    background: var(--surface);
+}
+.escola-troca-card:hover:not(.escola-atual) {
+    border-color: var(--primary);
+    background: var(--primary-light);
+    transform: translateX(4px);
+}
+.escola-troca-card.escola-atual {
+    border-color: var(--primary);
+    background: var(--primary-light);
+    cursor: default;
+    opacity: .85;
+}
+
+.escola-troca-icon {
+    width: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.escola-troca-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.escola-troca-info strong {
+    font-size: 15px;
+    color: var(--text);
+}
+.escola-troca-info small {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.escola-troca-badge {
+    flex-shrink: 0;
+}
+.badge-atual {
+    background: var(--primary);
+    color: white;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 20px;
+}
+.badge-ir {
+    background: transparent;
+    color: var(--primary);
+    font-size: 13px;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 20px;
+    border: 1.5px solid var(--primary);
+    transition: all .2s;
+}
+.escola-troca-card:hover .badge-ir {
+    background: var(--primary);
+    color: white;
+}
+
+/* ── Botão Perfil na Topbar ───────────────────────── */
+.tb-btn-perfil {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.nav-avatar-inicial {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.25);
+    color: white;
+    font-weight: 700;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1.5px solid rgba(255,255,255,0.5);
+    flex-shrink: 0;
+}
+.tb-btn-perfil-label { font-size: 13px; }
+
+/* ── Página Perfil ────────────────────────────────── */
+.perfil-wrapper {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 0 0 60px;
+}
+
+.perfil-page-header {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    margin-bottom: 32px;
+    padding-bottom: 20px;
+    border-bottom: 1.5px solid var(--border);
+}
+
+.perfil-voltar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: none;
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all .2s;
+    white-space: nowrap;
+}
+.perfil-voltar:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+}
+
+.perfil-page-titulo { font-family: var(--font-display); font-size: 26px; color: var(--text); margin: 0; }
+.perfil-page-sub    { font-size: 13px; color: var(--text-muted); margin: 4px 0 0; }
+
+.perfil-grid {
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    gap: 24px;
+    align-items: start;
+}
+
+/* Coluna esquerda */
+.perfil-identidade {
+    position: sticky;
+    top: 20px;
+    text-align: center;
+}
+
+.perfil-avatar-wrap { position: relative; display: inline-block; margin-bottom: 14px; }
+.perfil-avatar {
+    width: 88px;
+    height: 88px;
+    border-radius: 50%;
+    background: var(--primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto;
+    box-shadow: 0 4px 16px rgba(0,71,182,.25);
+}
+.perfil-avatar span {
+    font-size: 36px;
+    font-weight: 800;
+    color: white;
+    line-height: 1;
+}
+.perfil-avatar-badge {
+    position: absolute;
+    bottom: -2px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--accent);
+    color: #1a1a1a;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 10px;
+    border-radius: 20px;
+    white-space: nowrap;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+}
+
+.perfil-nome-display  { font-size: 17px; font-weight: 700; color: var(--text); margin: 16px 0 4px; }
+.perfil-email-display { font-size: 12px; color: var(--text-muted); margin: 0 0 12px; word-break: break-all; }
+
+.perfil-escola-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: var(--primary-light);
+    color: var(--primary);
+    font-size: 12px;
+    font-weight: 600;
+    padding: 5px 12px;
+    border-radius: 20px;
+    margin-bottom: 20px;
+}
+
+.perfil-sidebar-disc { margin-top: 4px; }
+.perfil-sidebar-disc-titulo {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: .6px;
+    margin-bottom: 8px;
+}
+.perfil-sidebar-disc-tag {
+    display: inline-block;
+    background: var(--surface-alt, #f1f5f9);
+    color: var(--text);
+    font-size: 12px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    margin: 3px 2px;
+}
+
+/* Cards formulários */
+.perfil-card {
+    background: var(--surface);
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px;
+    margin-bottom: 20px;
+}
+
+.perfil-card-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+}
+
+.perfil-card-icone {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+.perfil-icone-dados       { background: #dbeafe; color: #1d4ed8; }
+.perfil-icone-disciplinas { background: #dcfce7; color: #15803d; }
+.perfil-icone-seguranca   { background: #fee2e2; color: #b91c1c; }
+
+.perfil-card-titulo { font-size: 16px; font-weight: 700; color: var(--text); margin: 0; }
+
+.perfil-campo-grupo { margin-bottom: 16px; }
+.perfil-label { display: block; font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 6px; }
+
+.perfil-input {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    font-size: 14px;
+    font-family: var(--font-body);
+    color: var(--text);
+    background: var(--bg);
+    outline: none;
+    transition: border .2s;
+    box-sizing: border-box;
+}
+.perfil-input:focus { border-color: var(--primary); }
+.perfil-input-readonly { background: var(--surface-alt, #f8fafc); color: var(--text-muted); cursor: not-allowed; }
+.perfil-hint { display: block; font-size: 11px; color: var(--text-muted); margin-top: 5px; }
+
+.perfil-input-senha-wrap { position: relative; }
+.perfil-input-senha-wrap .perfil-input { padding-right: 42px; }
+.perfil-olho {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-muted);
+    padding: 0;
+    display: flex;
+    align-items: center;
+}
+
+.perfil-forca-senha {
+    height: 4px;
+    background: var(--border);
+    border-radius: 4px;
+    margin-top: 8px;
+    overflow: hidden;
+}
+.perfil-forca-barra {
+    height: 100%;
+    width: 0;
+    border-radius: 4px;
+    transition: width .3s, background .3s;
+}
+
+/* Disciplinas tags */
+.perfil-disciplinas-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 14px;
+    min-height: 32px;
+}
+.perfil-disc-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: var(--primary-light);
+    color: var(--primary);
+    font-size: 13px;
+    font-weight: 600;
+    padding: 4px 10px 4px 12px;
+    border-radius: 20px;
+}
+.perfil-disc-tag button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--primary);
+    font-size: 16px;
+    line-height: 1;
+    padding: 0 2px;
+    opacity: .7;
+}
+.perfil-disc-tag button:hover { opacity: 1; }
+
+.perfil-disciplina-add {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+.perfil-disciplina-add .perfil-input { margin: 0; }
+
+/* Botões do perfil */
+.perfil-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition: all .2s;
+    font-family: var(--font-body);
+}
+.perfil-btn-primario {
+    background: var(--primary);
+    color: white;
+    width: 100%;
+    justify-content: center;
+}
+.perfil-btn-primario:hover { background: var(--primary-dark); }
+.perfil-btn-primario:disabled { opacity: .6; cursor: not-allowed; }
+
+.perfil-btn-outline-sm {
+    background: transparent;
+    color: var(--primary);
+    border: 1.5px solid var(--primary);
+    padding: 10px 16px;
+    white-space: nowrap;
+}
+.perfil-btn-outline-sm:hover { background: var(--primary-light); }
+
+.perfil-btn-perigo {
+    background: #fee2e2;
+    color: #b91c1c;
+    border: 1.5px solid #fecaca;
+    width: 100%;
+    justify-content: center;
+    margin-top: 4px;
+}
+.perfil-btn-perigo:hover { background: #fecaca; }
+.perfil-btn-perigo:disabled { opacity: .6; cursor: not-allowed; }
+
+/* Responsivo perfil */
+@media (max-width: 760px) {
+    .perfil-grid { grid-template-columns: 1fr; }
+    .perfil-identidade { position: static; }
+    .perfil-disciplina-add { flex-direction: column; }
+    .perfil-btn-outline-sm { width: 100%; justify-content: center; }
+}
