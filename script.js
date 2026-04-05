@@ -51,7 +51,7 @@ let GEMINI_IA_ATIVO         = true;
 const GEMINI_MODELS = [
     "gemini-2.0-flash-lite",   // 1º: mais rápido, free tier generoso
     "gemini-2.0-flash",        // 2º: melhor qualidade, ainda gratuito
-    "gemini-1.5-flash"         // 3º: fallback estável
+    "gemini-2.0-flash-exp"     // 3º: fallback experimental, ainda gratuito
 ];
 
 async function carregarConfiguracaoIA() {
@@ -2034,7 +2034,7 @@ async function abrirModalConfigIA() {
                 <option value=""    ${!cfgAtual.modelo ? 'selected' : ''}>Automático (fallback do mais rápido ao mais robusto)</option>
                 <option value="gemini-2.0-flash-lite" ${cfgAtual.modelo==='gemini-2.0-flash-lite'?'selected':''}>gemini-2.0-flash-lite — Mais rápido, free tier generoso</option>
                 <option value="gemini-2.0-flash"      ${cfgAtual.modelo==='gemini-2.0-flash'     ?'selected':''}>gemini-2.0-flash — Melhor qualidade, ainda gratuito</option>
-                <option value="gemini-1.5-flash"      ${cfgAtual.modelo==='gemini-1.5-flash'     ?'selected':''}>gemini-1.5-flash — Fallback estável e bem testado</option>
+                <option value="gemini-2.0-flash-exp" ${cfgAtual.modelo==="gemini-2.0-flash-exp"?"selected":""}>gemini-2.0-flash-exp — Experimental, gratuito (fallback)</option>
             </select>
             <span style="font-size:11px;color:var(--text-muted);display:block;margin-top:5px;">No modo Automático, se um modelo falhar por quota o próximo é tentado.</span>
         </div>
