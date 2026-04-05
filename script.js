@@ -1518,7 +1518,7 @@ window.gerarPlanoComIA = async function(semanaIndex, diaIndex, aulaIndex, btnEl)
     }
 
     if (!GEMINI_API_KEY) {
-        showToast('⚠️ Configure GEMINI_API_KEY em script.js', 'error');
+        showToast('⚠️ IA não configurada. Acesse Admin → 🤖 Configurar IA', 'error');
         return;
     }
 
@@ -1598,7 +1598,7 @@ function renderGradeSemana(index) {
     const { horarios, breaks } = calcularHorarios(cfg);
     const disciplinas = getDisciplinasMescladas(); // ✅ usa disciplinas mescladas
 
-    const temGemini = !!GEMINI_API_KEY;
+    const temGemini = !!GEMINI_API_KEY && GEMINI_IA_ATIVO;
 
     let html = `<div class="grade-wrapper"><div class="grade-table" style="grid-template-columns:110px repeat(5,1fr);">`;
 
@@ -1636,7 +1636,7 @@ function renderGradeSemana(index) {
                             <button class="cell-btn cell-btn-ai" onclick="gerarPlanoComIA(${index},${dia},${ai},this)" title="Gerar plano com IA">
                                 ✨ IA
                             </button>` : `
-                            <button class="cell-btn cell-btn-ai cell-btn-ai-off" onclick="showToast('Configure GEMINI_API_KEY em script.js','error')" title="IA não configurada">
+                            <button class="cell-btn cell-btn-ai cell-btn-ai-off" onclick="showToast('IA não configurada. Acesse Admin → 🤖 Configurar IA','error')" title="IA não configurada — clique para saber mais">
                                 🔑 IA
                             </button>`}
                             <button class="cell-btn cell-btn-copy" onclick="copiarConteudo(${index},${dia},${ai})">📋</button>
